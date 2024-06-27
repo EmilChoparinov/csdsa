@@ -4,6 +4,7 @@ tests/objs
 run_demo
 demo/objs
 obj
+*.zip
 
 ### C ###
 # Prerequisites

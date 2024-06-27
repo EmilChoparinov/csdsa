@@ -178,7 +178,7 @@ $(TST_OBJ_DIR):
 	@mkdir $@
 
 #------------------------------------------------------------------------------#
-# MAKE DEMO																	   #
+# MAKE EXEC																	   #
 #------------------------------------------------------------------------------#
 exec: $(BUILD_FILE_NAME) $(DEM_DIR) $(DEM_OBJ) 
 	$(CC) $(BUILDFLAGS) $(CXXFLAGS) $(DEM_INC) $(DEM_FILES) $(BUILD_LIB_FILE) -o $(DEMO_FILE_NAME)
@@ -216,10 +216,11 @@ memtst_containerized: $(BUILD_FILE_NAME) $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS)
 .PHONY: docker
 docker:
 	@echo "Entering Container"
-	docker start csdsa-container >/dev/null
-	docker exec -it csdsa-container /bin/bash
-	@echo "Stopping container...please wait..."
-	@docker stop csdsa-container
+	@docker run --rm -it \
+		-v "$$(pwd):/virtual" \
+		--name csdsa-container \
+		csdsa-image \
+		/bin/bash
 	@echo "Done!"
 
 #------------------------------------------------------------------------------#
