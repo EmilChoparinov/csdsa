@@ -6,17 +6,17 @@
 #
 #	USAGE:
 #	make all    | Builds into a *.a binary for linking.
-#	make pkg	| Builds into a zip containing the *.a binary and *.h files.
+#	make pkg    | Builds into a zip containing the *.a binary and *.h files.
 #	make exec   | Builds the exec which can be used for development and testing.
 #	make test   | Runs all tests in the test directory.
-#	make env	| Build a new docker image compatible with compiling.
+#	make env    | Build a new docker image compatible with compiling.
 #	make docker | Enters a docker environment compatible with compiling.
 #	make memtst | Run all tests in the test directory. Activated in docker. Make
 #				  sure to run 'make env' first.
 #==============================================================================#
 
 #------------------------------------------------------------------------------#
-# DIRECTORY PATH CONFIGURATIONS												   #
+# DIRECTORY PATH CONFIGURATIONS                                                #
 #------------------------------------------------------------------------------#
 #	Directory Configurations
 #	INC_DIRS:
@@ -50,7 +50,7 @@ TST_BINS_DIR = tests/bin
 TST_OBJ_DIR  = tests/objs
 
 #------------------------------------------------------------------------------#
-# COMPILER CONFIGURATIONS													   #
+# COMPILER CONFIGURATIONS                                                      #
 #------------------------------------------------------------------------------#
 #	CC:
 #	  - Compiler to use
@@ -75,7 +75,7 @@ TESTFLAGS = -DUNITY_OUTPUT_COLOR
 BUILDFLAGS = -D_DEBUG
 
 #------------------------------------------------------------------------------#
-# PROJECT CONFIGURATIONS													   #
+# PROJECT CONFIGURATIONS                                                       #
 #------------------------------------------------------------------------------#
 #	BUILD_FILE_NAME:
 #	  - The name of the output file.
@@ -89,7 +89,7 @@ DEMO_FILE_NAME  = run_demo
 UNITY_FILE_NAME = unity
 
 #------------------------------------------------------------------------------#
-# PROJECT FILE COLLETION													   #
+# PROJECT FILE COLLECTION                                                      #
 #------------------------------------------------------------------------------#
 #	SRC_FILES:
 #	  - Contains a list of all files in the SRC_DIR
@@ -116,7 +116,7 @@ OBJ_FILES = $(SRC_FILES:$(SRC_DIR)/%$(EXT)=$(OBJ_DIR)/%.o)
 TST_BINS  = $(patsubst $(TST_DIR)/%.c, $(TST_BINS_DIR)/%, $(TST_FILES))
 
 #------------------------------------------------------------------------------#
-# MAKE ALL					 												   #
+# MAKE ALL                                                                     #
 #------------------------------------------------------------------------------#
 all: notif $(BUILD_FILE_NAME)
 
@@ -140,14 +140,14 @@ $(OBJ_DIR)/tests/libs/%.o: $(LIBS_DIR)/%$(EXT)
 	@$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $@ -c $<
 
 #------------------------------------------------------------------------------#
-# MAKE PKG					 												   #
+# MAKE PKG                                                                     #
 #------------------------------------------------------------------------------#
 pkg: all 
 	@echo "Packaging..."
 	zip -j $(PACKG_ZIP_FILE) $(HDR_FILES) $(BUILD_LIB_FILE)
 
 #------------------------------------------------------------------------------#
-# MAKE TEST					 												   #
+# MAKE TEST                                                                    #
 #------------------------------------------------------------------------------#
 test: $(BUILD_FILE_NAME) build_unity $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
 	@echo Running Tests...
@@ -177,7 +177,7 @@ $(TST_OBJ_DIR):
 	@mkdir $@
 
 #------------------------------------------------------------------------------#
-# MAKE EXEC																	   #
+# MAKE EXEC                                                                    #
 #------------------------------------------------------------------------------#
 exec: $(BUILD_FILE_NAME) $(DEM_DIR) $(DEM_OBJ) 
 	$(CC) $(BUILDFLAGS) $(CXXFLAGS) $(DEM_INC) $(DEM_FILES) $(BUILD_LIB_FILE) -o $(DEMO_FILE_NAME)
@@ -191,39 +191,39 @@ $(DEM_DIR):
 	@mkdir $@
 
 #------------------------------------------------------------------------------#
-# MAKE MEMTST					 										   	   #
+# MAKE MEMTST                                                                  #
 #------------------------------------------------------------------------------#
 memtst:
-	@docker run --rm -it \
-		-v ".:/virtual" \
-		--name csdsa-container \
-		csdsa-image \
+	@docker run --rm -it                                                       \
+		-v ".:/virtual"                                                        \
+		--name csdsa-container                                                 \
+		csdsa-image                                                            \
 		/bin/bash -c 'make memtst_containerized clean'
 
 memtst_containerized: $(BUILD_FILE_NAME) $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS)
 	@echo Running Valgrind with Tests...
-	@for test in $(TST_BINS) ; do valgrind 									   \
-		 --show-leak-kinds=all										   	       \
-		 --leak-check=full 													   \
-		 --track-origins=yes 												   \
-		 ./$$test --verbose 											       \
+	@for test in $(TST_BINS) ; do valgrind                                     \
+		 --show-leak-kinds=all                                                 \
+		 --leak-check=full                                                     \
+		 --track-origins=yes                                                   \
+		 ./$$test --verbose                                                    \
 		 ; done
 
 #------------------------------------------------------------------------------#
-# MAKE DOCKER					 										   	   #
+# MAKE DOCKER                                                                  #
 #------------------------------------------------------------------------------#
 .PHONY: docker
 docker:
 	@echo "Entering Container"
-	@docker run --rm -it \
-		-v "$$(pwd):/virtual" \
-		--name csdsa-container \
-		csdsa-image \
+	@docker run --rm -it                                                       \
+		-v "$$(pwd):/virtual"                                                  \
+		--name csdsa-container                                                 \
+		csdsa-image                                                            \
 		/bin/bash
 	@echo "Done!"
 
 #------------------------------------------------------------------------------#
-# MAKE ENV						 										   	   #
+# MAKE ENV                                                                     #
 #------------------------------------------------------------------------------#
 .PHONY: env
 env:
@@ -240,7 +240,7 @@ env:
 	@echo "Done!"
 
 #------------------------------------------------------------------------------#
-# MAKE CLEAN																   #
+# MAKE CLEAN                                                                   #
 #------------------------------------------------------------------------------#
 .PHONY: clean
 clean:
