@@ -9,7 +9,5 @@ int main() {
 
     UNITY_BEGIN();
 
-    hello();
-
     UNITY_END();
 }

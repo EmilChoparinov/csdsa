@@ -119,7 +119,6 @@ TST_BINS  = $(patsubst $(TST_DIR)/%.c, $(TST_BINS_DIR)/%, $(TST_FILES))
 # MAKE ALL					 												   #
 #------------------------------------------------------------------------------#
 all: notif $(BUILD_FILE_NAME)
-	@echo $(TST_OBJ_FILES)
 
 notif:
 	@echo Building to ${BUILD_LIB_FILE}...
@@ -245,9 +244,6 @@ env:
 #------------------------------------------------------------------------------#
 .PHONY: clean
 clean:
-	@echo "Cleaning /$(OBJ_DIR)/* /$(TST_BINS_DIR)/* $(BUILD_LIB_FILE)"
-	@rm -r -f $(BUILD_LIB_FILE)
-	@rm -r -f $(OBJ_DIR)
-	@rm -r -f $(TST_BINS_DIR)
-	@rm -r -f $(PACKG_ZIP_FILE)
-	@rm -r -f $(DEMO_FILE_NAME)
+	@echo "Cleaning generated files..."
+	rm -rf $(BUILD_LIB_FILE) $(OBJ_DIR) $(TST_BINS_DIR) $(PACKG_ZIP_FILE)
+	rm -rf $(DEMO_FILE_NAME) $(UNITY_FILE_NAME).o
