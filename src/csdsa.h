@@ -20,8 +20,8 @@
     allocator) and supports stack allocation and random heap allocation. The
     allocator utilizes the same contiguous memory segment for both heap and
     stack allocation for best performance.
-    
-    Only random heap allocations may use the libraries free function. Stack 
+
+    Only random heap allocations may use the libraries free function. Stack
     context allocations use pop() or the built in global stack pop function.
 
     === Data Structures ===
@@ -52,7 +52,10 @@
 #ifndef __HEADER_CSDSA_H__
 #define __HEADER_CSDSA_H__
 
+#include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 /*-------------------------------------------------------
  * libcsdsa Configurations
@@ -62,24 +65,44 @@
 /*-------------------------------------------------------
  * Type Definitions
  *-------------------------------------------------------*/
-typedef struct stallocator stallocator;
+typedef struct stalloc stalloc;
+typedef struct buffapi buffapi;
 
 /*-------------------------------------------------------
  * Stack Allocator stalloc
  *-------------------------------------------------------*/
-#define STALLOC_DEFAULT 1024 /* The default size to pass to stalloc_create */
+#define STALLOC_DEFAULT 1 /* The default size to pass to stalloc_create */
 
-stallocator *stalloc_create(int64_t bytes);
-void         stalloc_free(stallocator *alloc);
+stalloc *stalloc_create(int64_t bytes);
+void     stalloc_free(stalloc *alloc);
 
 /* Stack allocation */
-void *stalloc(stallocator *alloc, int64_t bytes);
-void *stcalloc(stallocator *alloc, int64_t times, int64_t bytes);
+void *stpush(stalloc *alloc, int64_t bytes);
+void  stpop(stalloc *alloc);
 
 /* Heap allocation */
-void *sthalloc(stallocator *alloc, int64_t bytes);
+void *halloc(stalloc *alloc, int64_t bytes);
+void *hrealloc(stalloc *alloc, void *ptr, int64_t bytes);
+void  hfree(stalloc *alloc, void *ptr);
 
-/* Works with both stack and heap allocated pointers */
-void *strealloc(stallocator *alloc, void *ptr, int64_t bytes);
+/*-------------------------------------------------------
+ * Buffer API
+ *-------------------------------------------------------*/
+struct buffapi {
+  void   *region; /* Pointer to base memory. */
+  void   *top;    /* Pointer to the end of base memory operations. */
+  int64_t len;    /* Length of objects pushed/pop'd. */
+};
+
+/* Container Operations */
+buffapi *buff_init(buffapi *b, void *region);
+buffapi *buff_hinit(void *region);
+void     buff_hfree(buffapi *b);
+
+/* Element Operations */
+void  buff_push(buffapi *b, void *item, size_t item_size);
+void *buff_pop(buffapi *b, size_t item_size);
+void *buff_at(buffapi *b);
+void *buff_skip(buffapi *b, size_t to_skip);
 
 #endif
