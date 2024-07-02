@@ -10,8 +10,8 @@ int main() {
 
     stalloc *alloc = stalloc_create(STALLOC_DEFAULT);
 
-    // void *x = stpush(alloc, 2000);
-    // stpush(alloc, 200);
+    void *x = stpush(alloc, 2000);
+    stpush(alloc, 200);
     stpop(alloc);
     stpop(alloc);
     stpop(alloc);
@@ -23,7 +23,7 @@ int main() {
     stpop(alloc);
     stpop(alloc);
     stpop(alloc);
-    // printf("%p\n", x);
+    printf("%p\n", x);
 
     stalloc_free(alloc);
 

@@ -32,30 +32,45 @@
 #define ALLOCATED 0
 #define FREE      1
 
-#define GUARD_SIZE              4
-#define BLOCK_SIZE(guard)       ((uint32_t)((guard) >> 4))
+#define GUARD_SIZE        4
+#define THREAD_ID_SIZE    4
+#define HEADER_SIZE       (GUARD_SIZE + THREAD_ID_SIZE)
+#define FOOTER_SIZE       (GUARD_SIZE)
+#define BLOCK_SIZE(guard) ((uint32_t)((guard) >> 4))
+
 #define IS_FREE(guard)          (((guard) & 1) == 1)
 #define MAKE_GUARD(size, state) (((size) << 4) | (state))
 
-typedef struct allocator allocator;
-struct allocator {
-  void   *region;
-  void   *stack_ptr;
-  void   *heap_div_ptr;
-  int64_t region_size;
-  int64_t total_allocations;
+/* Each thread has their own local id */
+pthread_key_t alloc_ids;
+
+typedef struct stack_frame stack_frame;
+struct stack_frame {
+  int64_t   stack_allocs; /* The count of allocations done on this frame */
+  pthread_t key;          /* Key to what position the stack id is in */
+};
+
+typedef struct alloc alloc;
+struct alloc {
+  void            *region;
+  atomic_uintptr_t stack_ptr;
+  atomic_uintptr_t heap_div_ptr;
+  int64_t          region_size;
+  alloc           *next;
 };
 
 struct stalloc {
-  allocator *allocators;      /* The allocators being managed */
-  int64_t    allocator_count; /* The count in `allocators` */
+  atomic_uintptr_t *top;
+  stack_frame      *frames;
+  int64_t           allocator_count; /* The count in `allocators` */
 };
 
 /*-------------------------------------------------------
  * Implementation
  *-------------------------------------------------------*/
 static void append_new_alloc(stalloc *allocs, int64_t region_size);
-static void alloc_make(allocator *alloc, int64_t region_size);
+static void alloc_make(alloc *alloc, int64_t region_size);
+static void attempt_alloc_merge(stalloc *allocs);
 
 stalloc *stalloc_create(int64_t bytes) {
   stalloc *alloc = calloc(1, sizeof(*alloc));
@@ -66,37 +81,43 @@ stalloc *stalloc_create(int64_t bytes) {
   return alloc;
 }
 
-void stalloc_free(stalloc *alloc) {
-  for (int64_t i = 0; i < alloc->allocator_count; i++) {
-    free(alloc->allocators[i].region);
+void stalloc_free(stalloc *a) {
+  alloc *cur = (alloc *)atomic_load(a->top);
+  while (cur != NULL) {
+    free(cur->region);
+    void *temp = cur->next;
+    free(cur);
+    cur = temp;
   }
-
-  free(alloc->allocators);
-  free(alloc);
+  free(a);
 }
 
-void *stpush(stalloc *alloc, int64_t bytes) {
-  allocator *alloc_to_use = &alloc->allocators[alloc->allocator_count - 1];
+void *stpush(stalloc *a, int64_t bytes) {
+  alloc *alloc_to_use = (alloc *)atomic_load(a->top);
 
-  if (alloc_to_use->stack_ptr + bytes > alloc_to_use->heap_div_ptr) {
-    append_new_alloc(alloc, bytes);
-    alloc_to_use = &alloc->allocators[alloc->allocator_count - 1];
+  void *stack_ptr = (void *)atomic_load(&alloc_to_use->stack_ptr);
+  void *heap_div_ptr = (void *)alloc_to_use->heap_div_ptr;
+
+  if (stack_ptr + bytes > heap_div_ptr) {
+    append_new_alloc(a, bytes);
+    alloc_to_use = (alloc *)atomic_load(a->top);
   }
 
   /* TODO: make sure blocks are aligned! */
   /* The guard stores the TOTAL size of the block so the block can be skipped
-     while doing linear reads. Therefore, both guards are included. */
-  uint32_t memory_guard = MAKE_GUARD(bytes + GUARD_SIZE * 2, ALLOCATED);
+     while doing linear reads. Therefore, header/footer are included. */
+  uint32_t memory_guard =
+      MAKE_GUARD(bytes + HEADER_SIZE + FOOTER_SIZE, ALLOCATED);
 
   buffapi buff;
-  buff_init(&buff, alloc_to_use->stack_ptr);
-  buff_push(&buff, &memory_guard, sizeof(uint32_t));
+  buff_init(&buff, &alloc_to_use->stack_ptr);
+  buff_push(&buff, &memory_guard, GUARD_SIZE);
+  // buff_skip(&buff, )
   buff_skip(&buff, bytes);
   buff_push(&buff, &memory_guard, sizeof(memory_guard));
 
-  void *mem_to_return = alloc_to_use->stack_ptr + GUARD_SIZE;
+  void *mem_to_return = stack_ptr + GUARD_SIZE;
   alloc_to_use->stack_ptr += bytes + GUARD_SIZE * 2; /* Skip both guards */
-  alloc_to_use->total_allocations++;
 
   /* zero out for the users convenience */
   memset(mem_to_return, 0, bytes);
@@ -104,18 +125,22 @@ void *stpush(stalloc *alloc, int64_t bytes) {
   return mem_to_return;
 }
 
-void stpop(stalloc *allocs) {
+void stpop(stalloc *a) {
   /* Cascade down from the top of the allocators and pop first found. */
-  for (int64_t i = allocs->allocator_count - 1; i >= 0; i--) {
-    allocator *alloc = &allocs->allocators[i];
-    if (alloc->stack_ptr == alloc->region) continue; /* Stack empty */
+  alloc *cur = (alloc *)atomic_load(a->top);
+  while (cur != NULL) {
+    if (cur->stack_ptr == cur->region) { /* Stack empty case. */
+      cur = cur->next;
+      continue;
+    }
 
     buffapi buff;
-    buff_init(&buff, alloc->stack_ptr);
-    buff_skip(&buff, -GUARD_SIZE); /* Load guard behind the stack ptr*/
+    buff_init(&buff, cur->stack_ptr);
+    buff_skip(&buff, -HEADER_SIZE); /* Load header behind the stack ptr */
     uint32_t size = BLOCK_SIZE(*(uint32_t *)buff_at(&buff));
     assert(!IS_FREE(*(uint32_t *)buff_at(&buff)));
-    alloc->stack_ptr -= size;
+    cur->stack_ptr -= size;
+    attempt_alloc_merge(a);
     break;
   }
 }
@@ -132,35 +157,67 @@ void *hrealloc(stalloc *alloc, void *ptr, int64_t bytes) {
 void hfree(stalloc *alloc, void *ptr) { free(ptr); }
 
 /*-------------------------------------------------------
- * Private Sections
+ * Stack Frame Interface
  *-------------------------------------------------------*/
-static void alloc_make(allocator *alloc, int64_t region_size) {
-  assert(alloc);
-  alloc->region = calloc(1, region_size);
-  alloc->region_size = region_size;
-  alloc->stack_ptr = alloc->region;
-  alloc->heap_div_ptr = alloc->stack_ptr + region_size;
-  alloc->total_allocations = 0;
+__stack_frame start_frame(stalloc *alloc) {
+  return (__stack_frame){.stack_allocs = 0};
 }
 
-static void append_new_alloc(stalloc *alloc, int64_t region_size) {
-  if (alloc->allocators == NULL) {
-    alloc->allocators = calloc(1, sizeof(*alloc->allocators));
-    alloc->allocator_count++;
+/*-------------------------------------------------------
+ * Private Sections
+ *-------------------------------------------------------*/
+static void alloc_make(alloc *a, int64_t region_size) {
+  assert(a);
+  a->region = calloc(1, region_size);
+  a->region_size = region_size;
+  a->stack_ptr = a->region;
+  a->heap_div_ptr = a->stack_ptr + region_size;
+  a->next = NULL;
+}
 
-    alloc_make(alloc->allocators, region_size);
+static void append_new_alloc(stalloc *a, int64_t region_size) {
+  if (a->top == NULL) {
+    a->top = calloc(1, sizeof(*a->top));
+    a->allocator_count++;
+
+    alloc_make(a->top, region_size);
     return;
   }
 
   /* Each next allocator must be at least double the region size of the last,
      and at least double the requested region size.  */
-  size_t next_size = alloc->allocators[alloc->allocator_count - 1].region_size;
+  // alloc *last_top = alloc->top;
+  alloc *last_top = (alloc *)atomic_load(a->top);
+  size_t next_size = last_top->region_size;
   next_size *= 2;
   while (next_size < region_size * 2) next_size *= 2;
 
-  alloc->allocator_count++;
-  alloc->allocators =
-      realloc(alloc->allocators, sizeof(allocator) * alloc->allocator_count);
-  allocator *new_allocator = &alloc->allocators[alloc->allocator_count - 1];
-  alloc_make(new_allocator, next_size);
+  a->allocator_count++;
+  a->top = calloc(1, sizeof(*a->top));
+  alloc_make(a->top, next_size);
+
+  /* CAS operation */
+  ((alloc *)a->top)->next = last_top;
+}
+
+void attempt_alloc_merge(stalloc *allocs) {
+  if (allocs->top == NULL) return;
+  alloc *top, *toptop;
+  top = allocs->top;
+  toptop = top->next;
+
+  /* If toptop is NULL we only have one allocator. */
+  if (toptop == NULL) return;
+
+  /* Merge requirement check */
+  if (!(top->stack_ptr == top->region && toptop->stack_ptr == toptop->region))
+    return;
+
+  /* Prepare merge block */
+  alloc *merged = calloc(1, top->region_size + toptop->region_size);
+  alloc_make(merged, top->region_size + toptop->region_size);
+  merged->next = toptop->next;
+
+  /* CAS operation */
+  allocs->top = merged;
 }

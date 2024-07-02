@@ -53,6 +53,8 @@
 #define __HEADER_CSDSA_H__
 
 #include <assert.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,6 +74,18 @@ typedef struct buffapi buffapi;
  * Stack Allocator stalloc
  *-------------------------------------------------------*/
 #define STALLOC_DEFAULT 1 /* The default size to pass to stalloc_create */
+typedef struct __stack_frame __stack_frame;
+struct __stack_frame {
+  int64_t   stack_allocs; /* The count of allocations done on this frame */
+  pthread_t allocatee;    /* The thread that owns this allocation */
+};
+#define FRAME(alloc, call)                                                     \
+  __stack_frame __csdsa_frame_ = start_frame(alloc);                           \
+  call;                                                                        \
+  end_frame(alloc);
+
+__stack_frame start_frame(stalloc *alloc);
+void          end_frame(stalloc *alloc);
 
 stalloc *stalloc_create(int64_t bytes);
 void     stalloc_free(stalloc *alloc);
