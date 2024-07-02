@@ -1,21 +1,16 @@
-#include "unity.h"
 #include "csdsa.h"
-
+#include "unity.h"
 
 void setUp() {}
-void tearDown() { }
+void tearDown() {}
 
-void test_block_bit_arithmatic(void) {
-    unsigned int num = 0xFFFFFFF8;
-
-    
-}
+void test_block_bit_arithmatic(void) {}
 
 int main() {
 
-    UNITY_BEGIN();
+  UNITY_BEGIN();
 
-    RUN_TEST(test_block_bit_arithmatic);
+  RUN_TEST(test_block_bit_arithmatic);
 
-    UNITY_END();
+  UNITY_END();
 }

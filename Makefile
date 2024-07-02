@@ -5,14 +5,17 @@
 #	This Makefile contains commands for building and testing the libcsdsa.
 #
 #	USAGE:
-#	make all    | Builds into a *.a binary for linking.
-#	make pkg    | Builds into a zip containing the *.a binary and *.h files.
-#	make exec   | Builds the exec which can be used for development and testing.
-#	make test   | Runs all tests in the test directory.
-#	make env    | Build a new docker image compatible with compiling.
-#	make docker | Enters a docker environment compatible with compiling.
-#	make memtst | Run all tests in the test directory. Activated in docker. Make
-#				  sure to run 'make env' first.
+#	make all     | Builds into a *.a binary for linking.
+#	make pkg     | Builds into a zip containing the *.a binary and *.h files.
+#	make exec    | Builds exec which can be used for development and testing.
+#	make test    | Runs all tests in the test directory.
+#	make env     | Build a new docker image compatible with compiling.
+#	make docker  | Enters a docker environment compatible with compiling.
+#   make service | Make a docker container in the background for entering.
+#   make sstop   | Stop the docker contaienr in the background
+#	make memtst  | Run all tests in the test directory. Activated in docker.
+#				   Make sure to run 'make env' first.
+#	make massif  | Prints the massif runtime of the demo and deletes it.
 #==============================================================================#
 
 #------------------------------------------------------------------------------#
@@ -70,9 +73,19 @@ CC = clang
 EXT = .c
 EXT_HDR = .h
 EXT_ARCHIVE = .a
-CXXFLAGS = -gdwarf-4 -Wall -Werror -UDEBUG $(INC_DIR)
+CXXFLAGS = -gdwarf-4 -Wall -Werror -UDEBUG -pg $(INC_DIR)
 TESTFLAGS = -DUNITY_OUTPUT_COLOR
 BUILDFLAGS = -D_DEBUG
+
+#==============================================================================#
+# DOCKER CONFIGURATIONS                                                        #
+#==============================================================================#
+#	IMG_NAME:
+#	  - The name of the docker image
+#	CNT_NAME:
+#	  - The name of the docker container
+IMG_NAME = csdsa-image
+CNT_NAME = csdsa-container
 
 #------------------------------------------------------------------------------#
 # PROJECT CONFIGURATIONS                                                       #
@@ -196,7 +209,7 @@ $(DEM_DIR):
 memtst:
 	@docker run --rm -it                                                       \
 		-v ".:/virtual"                                                        \
-		--name csdsa-container                                                 \
+		--name $(CNT_NAME)                                                     \
 		csdsa-image                                                            \
 		/bin/bash -c 'make memtst_containerized clean'
 
@@ -210,6 +223,25 @@ memtst_containerized: $(BUILD_FILE_NAME) $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS)
 		 ; done
 
 #------------------------------------------------------------------------------#
+# MAKE SERVICE                                                                 #
+#------------------------------------------------------------------------------#
+.PHONY: service
+service:
+	@echo "Making background container..."
+	@docker run                                                                \
+		-v "$$(pwd):/virtual"                                                  \
+		--name $(CNT_NAME)                                                     \
+		csdsa-image                                                            \
+		tail -f /dev/null
+	@echo "Done!"
+
+.PHONY: sservice
+sservice: 
+	@echo "Stoping background container..."
+	@docker stop $(CNT_NAME) || true
+	@docker rm $(CNT_NAME) || true
+
+#------------------------------------------------------------------------------#
 # MAKE DOCKER                                                                  #
 #------------------------------------------------------------------------------#
 .PHONY: docker
@@ -217,7 +249,7 @@ docker:
 	@echo "Entering Container"
 	@docker run --rm -it                                                       \
 		-v "$$(pwd):/virtual"                                                  \
-		--name csdsa-container                                                 \
+		--name $(CNT_NAME)                                                     \
 		csdsa-image                                                            \
 		/bin/bash
 	@echo "Done!"
@@ -226,18 +258,26 @@ docker:
 # MAKE ENV                                                                     #
 #------------------------------------------------------------------------------#
 .PHONY: env
-env:
+env: sservice
 	@echo "Calling 'make clean' to ensure source is clean before building!"
 	@make clean
 	@echo "Done!"
-	@echo "Removing container and image if they already exist..."
-	@docker stop csdsa-container || true
-	@docker rm csdsa-container || true
-	@docker rmi csdsa-image || true
+	@docker rmi $(IMG_NAME) || true
 	@echo "Done!"
 	@echo "Building image..."
-	@docker build -t csdsa-image .
+	@docker build -t $(IMG_NAME) .
 	@echo "Done!"
+
+#------------------------------------------------------------------------------#
+# MAKE MASSIF
+#------------------------------------------------------------------------------#
+.PHONY: massif
+massif: exec 
+	@echo "Calling massif gen tool"
+	@valgrind --tool=massif --time-unit=B ./$(DEMO_FILE_NAME)	
+	@ms_print massif.out.*
+	@rm massif.out.* gmon.out
+
 
 #------------------------------------------------------------------------------#
 # MAKE CLEAN                                                                   #
@@ -247,3 +287,4 @@ clean:
 	@echo "Cleaning generated files..."
 	rm -rf $(BUILD_LIB_FILE) $(OBJ_DIR) $(TST_BINS_DIR) $(PACKG_ZIP_FILE)
 	rm -rf $(DEMO_FILE_NAME) $(UNITY_FILE_NAME).o
+	rm -rf $(DEMO_FILE_NAME).dSYM
