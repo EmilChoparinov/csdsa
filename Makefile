@@ -8,15 +8,28 @@
 #	make all     | Builds into a *.a binary for linking.
 #	make pkg     | Builds into a zip containing the *.a binary and *.h files.
 #	make exec    | Builds exec which can be used for development and testing.
-#	make test    | Runs all tests in the test directory.
+#	make test    | Runs a specific test in the test directory.
+#	make tests   | Runs all tests in the test directory.
 #	make env     | Build a new docker image compatible with compiling.
 #	make docker  | Enters a docker environment compatible with compiling.
 #   make service | Make a docker container in the background for entering.
 #   make sstop   | Stop the docker contaienr in the background
-#	make memtst  | Run all tests in the test directory. Activated in docker.
+#	make memtsts | Run all tests in the test directory. Activated in docker.
+#				   Make sure to run 'make env' first.
+#	make memtst  | Run specific test in the test directory. Actiated in docker.
 #				   Make sure to run 'make env' first.
 #	make massif  | Prints the massif runtime of the demo and deletes it.
 #==============================================================================#
+
+#-------------------------------------------------------------------------------#
+# VARIABLES
+#-------------------------------------------------------------------------------#
+#  PROCESS:
+#	  - Used in the context of make massif and make test. Example:
+#		make massif PROCESS=run_demo
+#		make test PROCESS=./tests/bin/vector_tests
+#		make memtest PROCESS=./tests/bin/map_tests
+PROCESS = $(DEMO_FILE_NAME)
 
 #------------------------------------------------------------------------------#
 # DIRECTORY PATH CONFIGURATIONS                                                #
@@ -162,10 +175,16 @@ pkg: all
 #------------------------------------------------------------------------------#
 # MAKE TEST                                                                    #
 #------------------------------------------------------------------------------#
-test: $(BUILD_FILE_NAME) build_unity $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
+.PHONY: tests
+tests: $(BUILD_FILE_NAME) build_unity $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
 	@echo Running Tests...
+	@mkdir $(TST_DIR) || true
 	@echo
 	@for test in $(TST_BINS) ; do ./$$test --verbose && echo ; done
+
+test: $(BUILD_FILE_NAME) build_unity $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
+	@mkdir $(TST_DIR) || true
+	@./$(PROCESS) --verbose && echo
 
 build_unity:
 	$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $(UNITY_FILE_NAME).o -c $(UNITY_FILES)
@@ -178,10 +197,6 @@ $(TST_OBJ_DIR)/%.o: $(TST_DIR)%.c
 $(TST_BINS_DIR)/%: $(TST_DIR)/%.c
 	@echo + $< -\> $@
 	$(CC) $(BUILDFLAGS) $(CXXFLAGS) $(TST_INC) $(TESTFLAGS) $< $(UNITY_FILE_NAME).o $(LIB_TST_FILES) $(BUILD_LIB_FILE) -o $@
-
-$(TST_DIR):
-	@echo in TST_DIR
-	@mkdir $@
 
 $(TST_BINS_DIR):
 	@mkdir $@
@@ -204,6 +219,25 @@ $(DEM_DIR):
 	@mkdir $@
 
 #------------------------------------------------------------------------------#
+# MAKE MEMTSTS                                                                 #
+#------------------------------------------------------------------------------#
+memtsts:
+	@docker run --rm -it                                                       \
+		-v ".:/virtual"                                                        \
+		--name $(CNT_NAME)                                                     \
+		csdsa-image                                                            \
+		/bin/bash -c 'make memtsts_containerized clean'
+
+memtsts_containerized: $(BUILD_FILE_NAME) $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS)
+	@echo Running Valgrind with Tests...
+	@for test in $(TST_BINS) ; do valgrind                                     \
+		 --show-leak-kinds=all                                                 \
+		 --leak-check=full                                                     \
+		 --track-origins=yes                                                   \
+		 ./$$test --verbose                                                    \
+		 ; done
+
+#------------------------------------------------------------------------------#
 # MAKE MEMTST                                                                  #
 #------------------------------------------------------------------------------#
 memtst:
@@ -214,13 +248,9 @@ memtst:
 		/bin/bash -c 'make memtst_containerized clean'
 
 memtst_containerized: $(BUILD_FILE_NAME) $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS)
-	@echo Running Valgrind with Tests...
-	@for test in $(TST_BINS) ; do valgrind                                     \
-		 --show-leak-kinds=all                                                 \
-		 --leak-check=full                                                     \
-		 --track-origins=yes                                                   \
-		 ./$$test --verbose                                                    \
-		 ; done
+	  @valgrind --show-leak-kinds=all --leak-check=full --track-origins=yes    \
+		 $(PROCESS) --verbose                                                  \
+
 
 #------------------------------------------------------------------------------#
 # MAKE SERVICE                                                                 #
@@ -272,9 +302,9 @@ env: sservice
 # MAKE MASSIF
 #------------------------------------------------------------------------------#
 .PHONY: massif
-massif: exec 
+massif:
 	@echo "Calling massif gen tool"
-	@valgrind --tool=massif --time-unit=B ./$(DEMO_FILE_NAME)	
+	@valgrind --tool=massif --time-unit=B ./$(PROCESS)	
 	@ms_print massif.out.*
 	@rm massif.out.* gmon.out
 
