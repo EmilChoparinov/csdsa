@@ -228,7 +228,7 @@ memtsts:
 		csdsa-image                                                            \
 		/bin/bash -c 'make memtsts_containerized clean'
 
-memtsts_containerized: $(BUILD_FILE_NAME) $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS)
+memtsts_containerized: $(BUILD_FILE_NAME) build_unity $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
 	@echo Running Valgrind with Tests...
 	@for test in $(TST_BINS) ; do valgrind                                     \
 		 --show-leak-kinds=all                                                 \
@@ -245,9 +245,10 @@ memtst:
 		-v ".:/virtual"                                                        \
 		--name $(CNT_NAME)                                                     \
 		csdsa-image                                                            \
-		/bin/bash -c 'make memtst_containerized clean'
+		/bin/bash -c 'make memtst_containerized clean PROCESS=$(PROCESS)'
 
-memtst_containerized: $(BUILD_FILE_NAME) $(TST_DIR) $(TST_BINS_DIR) $(TST_BINS)
+memtst_containerized:  $(BUILD_FILE_NAME) build_unity $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
+	  @echo "Running $(PROCESS)"
 	  @valgrind --show-leak-kinds=all --leak-check=full --track-origins=yes    \
 		 $(PROCESS) --verbose                                                  \
 
