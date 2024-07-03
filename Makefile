@@ -18,7 +18,7 @@
 #				   Make sure to run 'make env' first.
 #	make memtst  | Run specific test in the test directory. Actiated in docker.
 #				   Make sure to run 'make env' first.
-#	make massif  | Prints the massif runtime of the demo and deletes it.
+#	make massif  | Prints the massif runtime of a executable and deletes temps.
 #==============================================================================#
 
 #-------------------------------------------------------------------------------#
@@ -152,7 +152,7 @@ notif:
 
 $(BUILD_FILE_NAME): $(OBJ_FILES)
 	@echo Bundling...
-	ar cr $(BUILD_LIB_FILE) $^
+	@ar cr $(BUILD_LIB_FILE) $^
 	@echo Done! GLHF
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%$(EXT)
@@ -187,16 +187,16 @@ test: $(BUILD_FILE_NAME) build_unity $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
 	@./$(PROCESS) --verbose && echo
 
 build_unity:
-	$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $(UNITY_FILE_NAME).o -c $(UNITY_FILES)
+	@$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $(UNITY_FILE_NAME).o -c $(UNITY_FILES)
 
 $(TST_OBJ_DIR)/%.o: $(TST_DIR)%.c
 	@mkdir -p $(@D)
 	@echo + $< -\> $@
-	$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $@ $< $(UNITY_FILE_NAME).o $(BUILD_LIB_FILE)
+	@$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $@ $< $(UNITY_FILE_NAME).o $(BUILD_LIB_FILE)
 
 $(TST_BINS_DIR)/%: $(TST_DIR)/%.c
 	@echo + $< -\> $@
-	$(CC) $(BUILDFLAGS) $(CXXFLAGS) $(TST_INC) $(TESTFLAGS) $< $(UNITY_FILE_NAME).o $(LIB_TST_FILES) $(BUILD_LIB_FILE) -o $@
+	@$(CC) $(BUILDFLAGS) $(CXXFLAGS) $(TST_INC) $(TESTFLAGS) $< $(UNITY_FILE_NAME).o $(LIB_TST_FILES) $(BUILD_LIB_FILE) -o $@
 
 $(TST_BINS_DIR):
 	@mkdir $@
@@ -230,10 +230,11 @@ memtsts:
 
 memtsts_containerized: $(BUILD_FILE_NAME) build_unity $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
 	@echo Running Valgrind with Tests...
-	@for test in $(TST_BINS) ; do valgrind                                     \
+	@for test in $(TST_BINS) ; do echo "***\nTEST: ./$$test\n***"; valgrind                                     \
 		 --show-leak-kinds=all                                                 \
 		 --leak-check=full                                                     \
 		 --track-origins=yes                                                   \
+		 --tool=memcheck \
 		 ./$$test --verbose                                                    \
 		 ; done
 
@@ -248,10 +249,13 @@ memtst:
 		/bin/bash -c 'make memtst_containerized clean PROCESS=$(PROCESS)'
 
 memtst_containerized:  $(BUILD_FILE_NAME) build_unity $(TST_BINS_DIR) $(TST_BINS) $(TST_OBJ_DIR)
-	  @echo "Running $(PROCESS)"
-	  @valgrind --show-leak-kinds=all --leak-check=full --track-origins=yes    \
-		 $(PROCESS) --verbose                                                  \
-
+	  @echo "Running with args 'PROCESS=$(PROCESS)'"
+	  @valgrind                                                                \
+		 --show-leak-kinds=all                                                 \
+		 --leak-check=full                                                     \
+		 --track-origins=yes                                                   \
+		 --tool=memcheck                                                       \
+		 $(PROCESS) --verbose 
 
 #------------------------------------------------------------------------------#
 # MAKE SERVICE                                                                 #
@@ -316,6 +320,7 @@ massif:
 .PHONY: clean
 clean:
 	@echo "Cleaning generated files..."
-	rm -rf $(BUILD_LIB_FILE) $(OBJ_DIR) $(TST_BINS_DIR) $(PACKG_ZIP_FILE)
-	rm -rf $(DEMO_FILE_NAME) $(UNITY_FILE_NAME).o
-	rm -rf $(DEMO_FILE_NAME).dSYM
+	rm -rf $(BUILD_LIB_FILE) $(OBJ_DIR) $(TST_BINS_DIR) $(PACKG_ZIP_FILE) || true
+	rm -rf $(DEMO_FILE_NAME) $(UNITY_FILE_NAME).o || true
+	rm -rf $(DEMO_FILE_NAME).dSYM || true
+	rm -rf massif.out.* gmon.out || true
