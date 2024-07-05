@@ -86,7 +86,8 @@ CC = clang
 EXT = .c
 EXT_HDR = .h
 EXT_ARCHIVE = .a
-CXXFLAGS = -gdwarf-4 -Wall -Werror -UDEBUG -pg $(INC_DIR)
+CXXFLAGS = -gdwarf-4 -Wall -Werror -UDEBUG $(INC_DIR)
+BENCHFLAGS = -pg
 TESTFLAGS = -DUNITY_OUTPUT_COLOR
 BUILDFLAGS = -D_DEBUG
 
@@ -192,11 +193,11 @@ build_unity:
 $(TST_OBJ_DIR)/%.o: $(TST_DIR)%.c
 	@mkdir -p $(@D)
 	@echo + $< -\> $@
-	@$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $@ $< $(UNITY_FILE_NAME).o $(BUILD_LIB_FILE)
+	$(CC) $(BUILDFLAGS) $(CXXFLAGS) -o $@ $< $(UNITY_FILE_NAME).o $(BUILD_LIB_FILE)
 
 $(TST_BINS_DIR)/%: $(TST_DIR)/%.c
 	@echo + $< -\> $@
-	@$(CC) $(BUILDFLAGS) $(CXXFLAGS) $(TST_INC) $(TESTFLAGS) $< $(UNITY_FILE_NAME).o $(LIB_TST_FILES) $(BUILD_LIB_FILE) -o $@
+	$(CC) $(BUILDFLAGS) $(CXXFLAGS) $(TST_INC) $(TESTFLAGS) $< $(UNITY_FILE_NAME).o $(LIB_TST_FILES) $(BUILD_LIB_FILE) -o $@
 
 $(TST_BINS_DIR):
 	@mkdir $@
@@ -309,7 +310,7 @@ env: sservice
 .PHONY: massif
 massif:
 	@echo "Calling massif gen tool"
-	@valgrind --tool=massif --time-unit=B ./$(PROCESS)	
+	@valgrind --tool=massif --time-unit=B $(PROCESS)	
 	@ms_print massif.out.*
 	@rm massif.out.* gmon.out
 

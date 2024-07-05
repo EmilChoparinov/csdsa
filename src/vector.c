@@ -19,34 +19,39 @@ vec *__vec_init(vec *v, int64_t el_size, stalloc *alloc, int32_t flags) {
 void vec_free(vec *v) {
   if (v->flags == TO_HEAP) {
     hfree(v->allocator, v->elements);
-  }
-;}
+  };
+}
 
 void vec_resize(vec *v, int64_t size) {
   init_asserts(v);
   v->length = size;
   if (size < v->__size) return;
   int64_t old_size = v->__size;
-  while (size >= v->__size) v->__size *= 2;
+  while (size > v->__size) v->__size *= 2;
   void *new_addr = vec_alloc(v, v->__size * v->__el_size);
   assert(new_addr);
-  memcpy(new_addr, v->elements, old_size * v->__el_size);
+
+  /* move to new_addr and set the new memory to 0 */
+  memmove(new_addr, v->elements, old_size * v->__el_size);
+  memset(new_addr + old_size * v->__el_size, 0,
+         v->__size * v->__el_size - old_size * v->__el_size);
+  
   /* If old address was heap alloc'd then it needs to be cleared */
-  if (v->flags == TO_HEAP) free(v->elements);
+  if (v->flags == TO_HEAP) hfree(v->allocator, v->elements);
   v->elements = new_addr;
 }
 
-void vec_copy(vec *dest, vec *src) {
-  init_asserts(dest);
+void *vec_copy(vec *dest, vec *src) {
   init_asserts(src);
-  vec_free(dest);
 
   /* Copy metadata */
   memmove(dest, src, sizeof(*src));
-  dest->elements = vec_alloc(dest, src->__size * src->__el_size);
 
   /* Copy elements */
-  memmove(dest->elements, src->elements, src->__size * src->__el_size);
+  dest->elements = vec_alloc(dest, src->__size * src->__el_size);
+  memmove(dest->elements, src->elements, src->length * src->__el_size);
+
+  return dest;
 }
 
 void vec_clear(vec *v) {
@@ -100,7 +105,7 @@ int64_t vec_find(vec *v, void *el) {
 void vec_push(vec *v, void *el) {
   init_asserts(v);
   assert(el);
-  vec_resize(v, v->length);
+  if (v->__top >= v->length) vec_resize(v, v->length + 1);
   memmove(lookup_el(v, v->__top), el, v->__el_size);
   v->__top++;
   if (v->__top >= v->length) v->length = v->__top;
@@ -145,9 +150,13 @@ vec *vec_filter(vec *v, _pred p, void *args) {
   init_asserts(v);
   vec filter;
   __vec_init(&filter, v->__el_size, v->allocator, TO_STACK);
+  vec_resize(&filter, v->length);
 
-  for (int64_t i = 0; i < v->length; i++)
-    if (p(vec_at(v, i), args)) vec_push(&filter, vec_at(v, i));
+  for (int64_t i = 0; i < v->length; i++) {
+    void *loc = vec_at(v, i);
+    if (p(loc, args)) vec_push(&filter, vec_at(v, i));
+  }
+  vec_resize(&filter, filter.__top);
 
   /* Free the internals of the *v vector and copy over the local one. */
   vec_free(v);
@@ -191,7 +200,7 @@ static void *vec_alloc(vec *v, int64_t bytes) {
 }
 static vec *vec_construct(vec *v) {
   v->length = 0;
-  v->__size = 1;
+  v->__size = VECTOR_DEFAULT_SIZE;
   v->__top = 0;
   return v;
 }

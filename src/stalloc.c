@@ -1,32 +1,33 @@
 /*------------------------------------------------------------------------------
- * Concurrent Stack Allocator memory layout strategy. 
- *                     Header                                                          
- *             31..............3 2 1 0                                                 
- * Memory     +----------------+-+-+-+  a=0 : Allocated                                
- * write -+-->|Block Size      |0|0|a|  a=1 : Free                                     
- * guards |   +----------------+-+-+-+                                                 
- *        |   |Thead ID              |                                                 
- *        |   +----------------------+                                                 
- *        |   |Allocated User        |                                                 
- *        |   |Memory                |                                                 
- *        |   |                      |                                                 
- *        |   +----------------------+    Always 0 for                                 
- *        |   |Alignment Padding     |    protection                                   
- *        |   +----------------+-+-+-+         |                                       
- *        +-->|Block Size      |0|0|a|         |                                       
- *            +----------------+-+-+-+         |                                       
- *                               ^             |                                       
- *                               +-------------+                                       
- * Region:                                                                             
- * +-----+-----+-----+--------------------------------+                                
- * |Block|Block|Block|                                |                                
- * +-----+-----+-----+--------------------------------+                                
- * +------->         ^                                ^                                
- * Stack             |  Atomic               Heap Div |                                
- * Allocator         +- Stack Ptr            Ptr    --+ 
+ * Concurrent Stack Allocator memory layout strategy.
+ *                     Header
+ *             31..............3 2 1 0
+ * Memory     +----------------+-+-+-+  a=0 : Allocated
+ * write -+-->|Block Size      |0|0|a|  a=1 : Free
+ * guards |   +----------------+-+-+-+
+ *        |   |Thead ID              |
+ *        |   +----------------------+
+ *        |   |Allocated User        |
+ *        |   |Memory                |
+ *        |   |                      |
+ *        |   +----------------------+    Always 0 for
+ *        |   |Alignment Padding     |    protection
+ *        |   +----------------+-+-+-+         |
+ *        +-->|Block Size      |0|0|a|         |
+ *            +----------------+-+-+-+         |
+ *                               ^             |
+ *                               +-------------+
+ * Region:
+ * +-----+-----+-----+--------------------------------+
+ * |Block|Block|Block|                                |
+ * +-----+-----+-----+--------------------------------+
+ * +------->         ^                                ^
+ * Stack             |  Atomic               Heap Div |
+ * Allocator         +- Stack Ptr            Ptr    --+
  * ---------------------------------------------------------------------------*/
 
 #include "csdsa.h"
+#include <execinfo.h>
 
 #define ALLOCATED 0
 #define FREE      1
@@ -97,26 +98,31 @@ void stalloc_free(stalloc *a) {
 }
 
 void *__stpush(stalloc *a, int64_t bytes) {
-  alloc *alloc_to_use = a->top;
 
-  if (alloc_to_use->stack_ptr + bytes + HEADER_SIZE + FOOTER_SIZE >
+  alloc  *alloc_to_use = a->top;
+  int64_t block_size = bytes;
+  
+  // TODO: implement stack alignment!
+  // addr = (addr + (8 - 1)) & -8;
+  // /* Ensure the stack pointer is aligned */
+  // uintptr_t aligned_stack_ptr = (uintptr_t)alloc_to_use->stack_ptr;
+  // if (aligned_stack_ptr % 8 != 0) {
+  //   aligned_stack_ptr = (aligned_stack_ptr + 7) & ~((uintptr_t)7);
+  // }
+
+  // /* Add the difference to the user block as padding */
+  // block_size += aligned_stack_ptr - (uintptr_t)alloc_to_use->stack_ptr;
+
+  if (alloc_to_use->stack_ptr + block_size + HEADER_SIZE + FOOTER_SIZE >
       alloc_to_use->heap_div_ptr) {
     append_new_alloc(a, bytes);
     alloc_to_use = a->top;
   }
 
-  /* Ensure the stack pointer is aligned */
-  uintptr_t aligned_stack_ptr = (uintptr_t)alloc_to_use->stack_ptr;
-  if (aligned_stack_ptr % 8 != 0) {
-    aligned_stack_ptr += 8 - (aligned_stack_ptr % 8);
-  }
-
-  alloc_to_use->stack_ptr = (void *)aligned_stack_ptr;
-
   /* The guard stores the TOTAL size of the block so the block can be skipped
-     while doing linear reads. Therefore, header/footer are included. */
+   while doing linear reads. Therefore, header/footer are included. */
   uint32_t memory_guard =
-      MAKE_GUARD(bytes + HEADER_SIZE + FOOTER_SIZE, ALLOCATED);
+      MAKE_GUARD(block_size + HEADER_SIZE + FOOTER_SIZE, ALLOCATED);
 
   /* Write the header guard */
   memcpy(alloc_to_use->stack_ptr, &memory_guard, HEADER_SIZE);
@@ -168,7 +174,8 @@ void start_frame(stalloc *alloc) {
   if (alloc->__frame_arr_len == 0) {
     alloc->frame_count++;
     alloc->__frame_arr_len = 1;
-    alloc->frames = calloc(1, alloc->__frame_arr_len * sizeof(stack_frame));
+    alloc->frames =
+        calloc(STACK_FRAME_GUESS, alloc->__frame_arr_len * sizeof(stack_frame));
   }
 
   alloc->frame_count++;
@@ -222,6 +229,7 @@ static void append_new_alloc(stalloc *a, int64_t region_size) {
   while (next_size < region_size * 2) next_size *= 2;
 
   a->allocator_count++;
+
   a->top = calloc(1, sizeof(*a->top));
   alloc_make(a->top, next_size);
 

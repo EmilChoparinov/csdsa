@@ -31,7 +31,7 @@
     map_*   : Open address hashing table with resize capabilities.
 
     set_*   : Implemented as a resizeable sparse set wrapped with
-                      the libraries hashing function.
+              the libraries hashing function.
 
     stack_* : Wrapper over vec_* and constrains the vector.
 
@@ -56,10 +56,11 @@
 #define __HEADER_CSDSA_H__
 
 #include <assert.h>
-// #include <pthread.h>
-// #include <stdatomic.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -68,8 +69,11 @@
  *-------------------------------------------------------*/
 // #define DISABLE_ALLOCATOR
 
-#define TO_STACK 0
-#define TO_HEAP  1
+#define TO_STACK            0
+#define TO_HEAP             1
+#define VECTOR_DEFAULT_SIZE 1
+#define MAP_DEFAULT_SIZE    32
+#define MAP_LOAD_FACTOR     0.75
 
 /*-------------------------------------------------------
  * Type Definitions
@@ -77,13 +81,14 @@
 typedef struct stalloc stalloc;
 typedef struct cbuff   cbuff;
 
-/* Typedefs for a functional programming style. */
+/* Internal typedefs for a functional programming style. */
 typedef void (*_nullary)(void *el, void *args);
 typedef bool (*_pred)(void *el, void *args);
 typedef void (*_unary)(void *out, void *el, void *args);
 typedef void (*_binary)(void *out, void *a, void *b, void *args);
 typedef bool (*_compare)(void *a, void *b, void *args);
 
+/* Macros to create FP functions. */
 #define nullary(ty, prop, name, body)                                          \
   void name(void *_el, void *args) {                                           \
     ty prop = *(ty *)_el;                                                      \
@@ -101,8 +106,8 @@ typedef bool (*_compare)(void *a, void *b, void *args);
     ty prop = *(ty *)_el;                                                      \
     body;                                                                      \
   }                                                                            \
-  void name(void *out, void *_el, void *args) {                                 \
-    ty prop = name##_un(_el, args);                                             \
+  void name(void *out, void *_el, void *args) {                                \
+    ty prop = name##_un(_el, args);                                            \
     memcpy(out, &prop, sizeof(ty));                                            \
   }
 
@@ -138,16 +143,23 @@ typedef bool (*_compare)(void *a, void *b, void *args);
 /* =========================================================================
    Section: Allocator
 ========================================================================= */
-#define STALLOC_DEFAULT 1024 /* The default size to pass to stalloc_create */
+#define STALLOC_DEFAULT 8192 /* The default size to pass to stalloc_create */
+#define STACK_FRAME_GUESS                                                      \
+  128 /* The count of frames to generate, resize is                            \
+         implemented. */
 
+/* NOTE: there can only be one framed_alloc per program. Later when threading
+         support is added, there can only be one framed_alloc per thread. */
 extern stalloc *framed_alloc;
 
+/* Initiate a global stack frame in the heap */
 #define GFRAME(alloc, call)                                                    \
   framed_alloc = alloc;                                                        \
   start_frame(alloc);                                                          \
   call;                                                                        \
   end_frame(alloc);
 
+/* Initiate a local frame in the allocator */
 #define FRAME(alloc, call)                                                     \
   start_frame(alloc);                                                          \
   call;                                                                        \
@@ -156,10 +168,11 @@ extern stalloc *framed_alloc;
 void start_frame(stalloc *alloc);
 void end_frame(stalloc *alloc);
 
+/* Container Operations */
 stalloc *stalloc_create(int64_t bytes);
 void     stalloc_free(stalloc *alloc);
 
-/* Stack allocation */
+/* Stack Allocation Strategy */
 #define stpusha(alloc, bytes) __stpush(alloc, bytes)
 #define stpush(bytes)         __stpushframe(bytes)
 
@@ -171,18 +184,15 @@ void *__stpushframe(int64_t bytes);
 void __stpop(stalloc *alloc);
 void __stpopframe(void);
 
-/* Heap allocation */
+/* Heap Allocation Strategy */
+// TODO: Make into arena!
 void *halloc(stalloc *alloc, int64_t bytes);
 void *hrealloc(stalloc *alloc, void *ptr, int64_t bytes);
 void  hfree(stalloc *alloc, void *ptr);
 
 /* =========================================================================
-   Section: Data Structures
+  Section: Vector
 ========================================================================= */
-
-/*-------------------------------------------------------
- * Vector (vec_*)
- *-------------------------------------------------------*/
 typedef struct vec vec;
 struct vec {
   int64_t  __top, __size, __el_size;
@@ -192,14 +202,14 @@ struct vec {
   void    *elements;
 };
 
-/* Container operations */
-vec *__vec_init(vec *v, int64_t el_size, stalloc *alloc, int32_t flags);
-void vec_free(vec *v);
-void vec_resize(vec *v, int64_t size);
-void vec_copy(vec *dest, vec *src);
-void vec_clear(vec *v);
+/* Container Operations */
+vec  *__vec_init(vec *v, int64_t el_size, stalloc *alloc, int32_t flags);
+void  vec_free(vec *v);
+void  vec_resize(vec *v, int64_t size);
+void *vec_copy(vec *dest, vec *src);
+void  vec_clear(vec *v);
 
-/* Element operations */
+/* Element Operations */
 void   *vec_at(vec *v, int64_t pos);
 void    vec_delete_at(vec *v, int64_t pos);
 void    vec_put(vec *v, int64_t pos, void *el);
@@ -210,7 +220,7 @@ void    vec_pop(vec *v);
 void   *vec_top(vec *v);
 void    vec_swap(vec *v, int64_t idx1, int64_t idx2);
 
-/* Functional operations */
+/* Functional Operations */
 void    vec_sort(vec *v, _compare cmp, void *args);
 int64_t vec_count_if(vec *v, _pred p, void *args);
 vec    *vec_filter(vec *v, _pred p, void *args);
@@ -218,6 +228,7 @@ void    vec_foreach(vec *v, _nullary n, void *args);
 vec    *vec_map(vec *v, _unary u, void *args);
 void   *vec_foldl(vec *v, _binary b, void *result, void *args);
 
+/* Vector Type Interface */
 #define VEC_TYPEDEC(cn, ty)                                                      \
   typedef vec cn;                                                                \
                                                                                  \
@@ -232,7 +243,9 @@ void   *vec_foldl(vec *v, _binary b, void *result, void *args);
   }                                                                              \
   void cn##_free(cn *v) { vec_free((vec *)v); }                                  \
   void cn##_resize(cn *v, int64_t size) { vec_resize((vec *)v, size); }          \
-  void cn##_copy(cn *dest, cn *src) { vec_copy((vec *)dest, (vec *)src); }       \
+  cn  *cn##_copy(cn *dest, cn *src) {                                            \
+    return vec_copy((vec *)dest, (vec *)src);                                   \
+  }                                                                              \
                                                                                  \
   void cn##_clear(cn *v) { vec_clear((vec *)v); }                                \
                                                                                  \
@@ -267,9 +280,105 @@ void   *vec_foldl(vec *v, _binary b, void *result, void *args);
     return vec_foldl((vec *)v, b, result, args);                                 \
   }
 
-/*-------------------------------------------------------
- * Buffer API
- *-------------------------------------------------------*/
+/* =========================================================================
+  Section: Map
+========================================================================= */
+typedef struct kvpair kvpair;
+struct kvpair {
+  void   *key, *value;
+  int32_t state; /* 0 = free, X != 0 in use */
+};
+
+typedef struct map map;
+
+struct map {
+  int64_t __size;     /* The allocated count of elements, used internally. */
+  int64_t __el_size;  /* The size of a element */
+  int64_t __key_size; /* The size of a key */
+
+  int64_t  slots_in_use; /* The count of elements in the map. */
+  int32_t  flags;        /* Contains allocation context information. */
+  int32_t  in_use_id;    /* Each clear increments this. */
+  stalloc *allocator;
+  vec      elements;
+};
+
+/* Container Operations */
+map *__map_init(map *m, int64_t el_size, int64_t key_size, stalloc *alloc,
+                int32_t flags);
+
+void    map_free(map *m);
+void    map_clear(map *m);
+vec    *map_to_vec(map *m, vec *out);
+map    *map_copy(map *dest, map *src);
+int64_t map_load(map *m);
+
+/* Element Operations */
+kvpair map_get(map *m, void *key);
+void   map_put(map *m, void *key, void *value);
+bool   map_has(map *m, void *key);
+void   map_del(map *m, void *key);
+kvpair read_kvpair(map *m, void *el);
+
+/* Functional Operations */
+int64_t map_count_if(map *m, _pred p, void *args);
+void    map_foreach(map *m, _nullary n, void *args);
+map    *map_filter(map *m, _pred p, void *args);
+kvpair  map_find_one(map *m, _pred p, void *args);
+
+/* Map Type Interface */
+#define MAP_TYPEDEC(cn, keyty, ty)                                             \
+  typedef map cn;                                                              \
+                                                                               \
+  cn *cn##_sinit(cn *m) {                                                      \
+    return __map_init((map *)m, sizeof(ty), sizeof(keyty), framed_alloc,       \
+                      TO_STACK);                                               \
+  }                                                                            \
+                                                                               \
+  cn *cn##_hinit(cn *m) {                                                      \
+    return __map_init((map *)m, sizeof(ty), sizeof(keyty), framed_alloc,       \
+                      TO_HEAP);                                                \
+  }                                                                            \
+                                                                               \
+  cn *cn##_inita(cn *m, stalloc *alloc, int8_t flags) {                        \
+    return __map_init((map *)m, sizeof(ty), sizeof(keyty), alloc, flags);      \
+  }                                                                            \
+                                                                               \
+  /* Container Operations */                                                   \
+  void  cn##_free(cn *m) { map_free((map *)m); }                               \
+  void  cn##_clear(cn *m) { map_clear((map *)m); }                             \
+  vec  *cn##_to_vec(cn *m, vec *out) { return map_to_vec((map *)m, out); }     \
+  void *cn##_copy(cn *dest, cn *src) {                                         \
+    return map_copy((map *)dest, (map *)src);                                  \
+  }                                                                            \
+                                                                               \
+  int64_t cn##_load(cn *m) { return map_load((map *)m); }                      \
+                                                                               \
+  /* Element Operations */                                                     \
+  kvpair cn##_get(cn *m, void *key) { return map_get((map *)m, key); }         \
+  void   cn##_put(cn *m, void *key, void *value) {                             \
+    map_put((map *)m, key, value);                                           \
+  }                                                                            \
+  bool cn##_has(cn *m, void *key) { return map_has((map *)m, key); }           \
+  void cn##_del(cn *m, void *key) { map_del((map *)m, key); }                  \
+                                                                               \
+  /* Functional Operations */                                                  \
+  int64_t cn##_count_if(cn *m, _pred p, void *args) {                          \
+    return map_count_if((map *)m, p, args);                                    \
+  }                                                                            \
+  void cn##_foreach(cn *m, _nullary n, void *args) {                           \
+    map_foreach((map *)m, n, args);                                            \
+  }                                                                            \
+  cn *cn##_filter(cn *m, _pred p, void *args) {                                \
+    return map_filter((map *)m, p, args);                                      \
+  }                                                                            \
+  kvpair cn##_find_one(cn *m, _pred p, void *args) {                           \
+    return map_find_one((map *)m, p, args);                                    \
+  }
+
+/* =========================================================================
+  Section: Cbuff
+========================================================================= */
 struct cbuff {
   void   *region; /* Pointer to base memory. */
   void   *top;    /* Pointer to the end of base memory operations. */
@@ -278,8 +387,6 @@ struct cbuff {
 
 /* Container Operations */
 cbuff *buff_init(cbuff *b, void *region);
-cbuff *buff_hinit(void *region);
-void   buff_hfree(cbuff *b);
 
 /* Element Operations */
 void  buff_push(cbuff *b, void *item, size_t item_size);
@@ -287,10 +394,11 @@ void *buff_pop(cbuff *b, size_t item_size);
 void *buff_at(cbuff *b);
 void *buff_skip(cbuff *b, size_t to_skip);
 
-/*-------------------------------------------------------
- * Utilities
- *-------------------------------------------------------*/
-void  memswap(void *a, void *b, size_t size);
-void *recalloc(void *a, size_t size);
+/* =========================================================================
+  Section: Utilities
+========================================================================= */
+void     memswap(void *a, void *b, size_t size);
+void    *recalloc(void *a, size_t size);
+uint64_t hash_bytes(void *ptr, size_t size);
 
 #endif

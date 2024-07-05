@@ -5,15 +5,6 @@ cbuff *buff_init(cbuff *b, void *region) {
   b->len = 0;
   return b;
 }
-cbuff *buff_hinit(void *region) {
-  cbuff *b = malloc(sizeof(cbuff));
-  assert(b);
-
-  buff_init(b, region);
-  return b;
-}
-
-void buff_hfree(cbuff *b) { free(b); }
 
 void buff_push(cbuff *b, void *item, size_t item_size) {
   assert(b);

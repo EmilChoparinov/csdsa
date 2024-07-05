@@ -14,7 +14,7 @@ stalloc *allocator = NULL;
 
 void setUp(void) {
   start_frame(allocator);
-  gvec_inita(&vector, allocator, TO_STACK);
+  gvec_inita(&vector, allocator, TO_HEAP);
 }
 void tearDown(void) {
   gvec_free(&vector);
@@ -32,18 +32,19 @@ void add_one_to_odds_and_set_all_evens_to_active(void);
 
 void sort(void);
 void delete_by_idx(void);
+void test_vec_copy(void);
 
 void tests(void) {
-  RUN_TEST(push_pop_clear_256);
-  RUN_TEST(count_5_circles);
-  RUN_TEST(has_random_element);
-
-  RUN_TEST(count_multiples_of_10_to_100);
-  RUN_TEST(filter_multiples_of_10_and_sum);
-  RUN_TEST(divide_all_even_numbers_by_2_under_100);
-  RUN_TEST(add_one_to_odds_and_set_all_evens_to_active);
-  RUN_TEST(sort);
-  RUN_TEST(delete_by_idx);
+  FRAME(allocator, RUN_TEST(push_pop_clear_256));
+  FRAME(allocator, RUN_TEST(count_5_circles));
+  FRAME(allocator, RUN_TEST(has_random_element));
+  FRAME(allocator, RUN_TEST(count_multiples_of_10_to_100));
+  FRAME(allocator, RUN_TEST(filter_multiples_of_10_and_sum));
+  FRAME(allocator, RUN_TEST(divide_all_even_numbers_by_2_under_100));
+  FRAME(allocator, RUN_TEST(add_one_to_odds_and_set_all_evens_to_active));
+  FRAME(allocator, RUN_TEST(sort));
+  FRAME(allocator, RUN_TEST(delete_by_idx));
+  FRAME(allocator, RUN_TEST(test_vec_copy));
 }
 
 int main(void) {
@@ -116,18 +117,7 @@ void count_multiples_of_10_to_100(void) {
   TEST_ASSERT(vector.length == 10);
 }
 
-// fold(int, group, residual, el, adder, return residual + el.x;);
-
-int adder_bin(void *_res, void *_a, void *args) {
-  int   residual = *(int *)_res;
-  group el = *(group *)_a;
-  return residual + el.x;
-  ;
-}
-void adder(void *out, void *a, void *b, void *args) {
-  int prop = adder_bin(a, b, args);
-  memcpy(out, &prop, sizeof(int));
-}
+fold(int, group, residual, el, adder, return residual + el.x;);
 void filter_multiples_of_10_and_sum(void) {
   for (int i = 0; i < 21; i++) {
     gvec_push(&vector, &(group){.x = i, .y = i, .z = i, .active = false});
@@ -214,4 +204,30 @@ void delete_by_idx(void) {
   }
 
   TEST_ASSERT(itr_count == original_length);
+}
+
+VEC_TYPEDEC(int_vec, int);
+
+void test_vec_copy(void) {
+  printf("START\n");
+
+  int_vec ivec;
+  int_vec_inita(&ivec, allocator, TO_HEAP);
+
+  for (int i = 1; i >= 0; i--) {
+    int_vec_push(&vector, &i);
+  }
+  printf("FIN\n");
+
+  int_vec copy;
+  int_vec_copy(&copy, &vector);
+
+  TEST_ASSERT(memcmp(copy.elements, vector.elements,
+                     vector.length * vector.__el_size) == 0);  
+  
+  TEST_ASSERT(copy.length == vector.length);
+
+
+  int_vec_free(&copy);
+  int_vec_free(&ivec);
 }
