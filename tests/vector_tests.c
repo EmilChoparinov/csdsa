@@ -14,7 +14,7 @@ stalloc *allocator = NULL;
 
 void setUp(void) {
   start_frame(allocator);
-  gvec_inita(&vector, allocator, TO_HEAP);
+  gvec_inita(&vector, allocator, TO_HEAP, VECTOR_DEFAULT_SIZE);
 }
 void tearDown(void) {
   gvec_free(&vector);
@@ -87,8 +87,8 @@ void count_5_circles(void) {
   }
 }
 
-pred(group, el, find_5, return el.x == 5);
-pred(group, el, find_100, return el.x == 100);
+pred(find_5, group, el, return el.x == 5);
+pred(find_100, group, el, return el.x == 100);
 
 void has_random_element(void) {
   for (int i = 0; i < 100; i++) {
@@ -96,7 +96,7 @@ void has_random_element(void) {
   }
 
   gvec copy;
-  gvec_copy(gvec_sinit(&copy), &vector);
+  gvec_copy(gvec_sinit(&copy, 1), &vector);
 
   gvec_filter(&vector, find_5, NULL);
   gvec_filter(&copy, find_100, NULL);
@@ -107,7 +107,7 @@ void has_random_element(void) {
   gvec_free(&copy);
 }
 
-pred(group, el, is_mult_10, return el.x % 10 == 0;);
+pred(is_mult_10, group, el, return el.x % 10 == 0;);
 void count_multiples_of_10_to_100(void) {
   for (int i = 0; i < 100; i++) {
     gvec_push(&vector, &(group){.x = i, .y = i, .z = i, .active = false});
@@ -117,7 +117,7 @@ void count_multiples_of_10_to_100(void) {
   TEST_ASSERT(vector.length == 10);
 }
 
-fold(int, group, residual, el, adder, return residual + el.x;);
+fold(int, adder, group, residual, el, return residual + el.x;);
 void filter_multiples_of_10_and_sum(void) {
   for (int i = 0; i < 21; i++) {
     gvec_push(&vector, &(group){.x = i, .y = i, .z = i, .active = false});
@@ -129,12 +129,12 @@ void filter_multiples_of_10_and_sum(void) {
   TEST_ASSERT(sum == 30);
 }
 
-pred(group, el, is_mult_2, return el.x % 2 == 0);
-unary(group, el, divide_2, if (el.x == 0) return el; el.x /= 2; return el;);
+pred(is_mult_2, group, el, return el.x % 2 == 0);
+unary(divide_2, group, el, if (el.x == 0) return el; el.x /= 2; return el;);
 
 void divide_all_even_numbers_by_2_under_100(void) {
   gvec vector;
-  gvec_sinit(&vector);
+  gvec_sinit(&vector, 100);
   for (int i = 0; i < 100; i++) {
     gvec_push(&vector, &(group){.x = i, .y = i, .z = i, .active = false});
   }
@@ -153,10 +153,10 @@ void divide_all_even_numbers_by_2_under_100(void) {
   TEST_ASSERT(vector.length == counter);
 }
 
-unary(group, el, to_odd_map, el.x = (el.x % 2 == 0) ? el.x : el.x + 1;
+unary(to_odd_map, group, el, el.x = (el.x % 2 == 0) ? el.x : el.x + 1;
       return el;);
-unary(group, el, activate, el.active = true; return el;);
-pred(group, el, is_active, return el.active;);
+unary(activate, group, el, el.active = true; return el;);
+pred(is_active, group, el, return el.active;);
 
 void add_one_to_odds_and_set_all_evens_to_active(void) {
   for (int i = 0; i < 100; i++) {
@@ -164,7 +164,7 @@ void add_one_to_odds_and_set_all_evens_to_active(void) {
   }
 
   gvec all_active;
-  gvec_copy(gvec_sinit(&all_active), &vector);
+  gvec_copy(gvec_sinit(&all_active, 1), &vector);
 
   gvec_filter(gvec_map(gvec_map(&all_active, to_odd_map, NULL), activate, NULL),
               is_active, NULL);
@@ -173,7 +173,7 @@ void add_one_to_odds_and_set_all_evens_to_active(void) {
   gvec_free(&all_active);
 }
 
-compare(group, a, b, sort_asc, return a.x < b.x;);
+compare(sort_asc, group, a, b, return a.x < b.x;);
 void sort(void) {
   for (int i = 25; i >= 0; i--) {
     gvec_push(&vector,
@@ -212,7 +212,7 @@ void test_vec_copy(void) {
   printf("START\n");
 
   int_vec ivec;
-  int_vec_inita(&ivec, allocator, TO_HEAP);
+  int_vec_inita(&ivec, allocator, TO_HEAP, VECTOR_DEFAULT_SIZE);
 
   for (int i = 1; i >= 0; i--) {
     int_vec_push(&vector, &i);
@@ -223,10 +223,9 @@ void test_vec_copy(void) {
   int_vec_copy(&copy, &vector);
 
   TEST_ASSERT(memcmp(copy.elements, vector.elements,
-                     vector.length * vector.__el_size) == 0);  
-  
-  TEST_ASSERT(copy.length == vector.length);
+                     vector.length * vector.__el_size) == 0);
 
+  TEST_ASSERT(copy.length == vector.length);
 
   int_vec_free(&copy);
   int_vec_free(&ivec);

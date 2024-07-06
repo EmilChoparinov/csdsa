@@ -70,14 +70,14 @@ static void maintain_load_factor(map *m) {
   /* If the load factor constraint is reached, create a map double the
      current size. */
   map new_map;
-  __map_init(&new_map, m->__el_size, m->__key_size, m->allocator, m->flags);
-  new_map.__size = m->__size * 2;
+  __map_init(&new_map, m->__el_size, m->__key_size, m->allocator, m->flags,
+             m->__size * 2);
   map_clear(&new_map); /* Reset map to be 2x bigger */
 
   /* Reinsertion step */
-  for(int64_t i = 0; i < m->elements.length; i++) {
+  for (int64_t i = 0; i < m->elements.length; i++) {
     void *el = vec_at(&m->elements, i);
-    if(*__get_state(m, el) != m->in_use_id) continue;
+    if (*__get_state(m, el) != m->in_use_id) continue;
 
     kvpair kv = read_kvpair(m, el);
     map_put(&new_map, kv.key, kv.value);
@@ -102,7 +102,7 @@ static int32_t *__get_state(map *m, void *el) {
 
 /* Container Operations */
 map *__map_init(map *m, int64_t el_size, int64_t key_size, stalloc *alloc,
-                int32_t flags) {
+                int32_t flags, int64_t initial_size) {
   assert(key_size > 0);
   assert(el_size > 0);
   assert(alloc);
@@ -111,14 +111,14 @@ map *__map_init(map *m, int64_t el_size, int64_t key_size, stalloc *alloc,
   m->allocator = alloc;
   m->in_use_id = 1;
 
-  m->__size = MAP_DEFAULT_SIZE;
+  m->__size = initial_size;
   m->__el_size = el_size;
   m->__key_size = key_size;
 
   /* We lay out the KV pair in memory as such. The kvpair struct is just
      smoke and mirrors. */
   assert(__vec_init(&m->elements, key_size + el_size + sizeof(m->in_use_id),
-                    alloc, flags) != NULL);
+                    alloc, flags, initial_size) != NULL);
   vec_resize(&m->elements, m->__size);
 
   return m;
@@ -135,7 +135,7 @@ void map_clear(map *m) {
   vec_resize(&m->elements, m->__size);
 }
 
-pred(int *, el, select_in_use, {
+pred(select_in_use, int *, el, {
   map   *m = (map *)args;
   kvpair kv = read_kvpair(m, el);
   printf("el state in SEARCHL: %d\n", kv.state);
@@ -145,7 +145,7 @@ vec *map_to_vec(map *m, vec *out) {
   init_asserts(m);
 
   __vec_init(out, m->__el_size + m->__key_size + sizeof(m->in_use_id),
-             m->allocator, m->flags);
+             m->allocator, m->flags, m->slots_in_use);
   vec_resize(out, m->slots_in_use);
 
   for (int64_t i = 0; i < m->elements.length; i++) {
@@ -259,7 +259,7 @@ int64_t map_count_if(map *m, _pred p, void *args) {
   return counter;
 }
 
-void map_foreach(map *m, _nullary n, void *args) {
+void map_foreach(map *m, _each n, void *args) {
   init_asserts(m);
   for (int64_t i = 0; i < m->elements.length; i++) {
     void *el = vec_at(&m->elements, i);
@@ -272,7 +272,8 @@ void map_foreach(map *m, _nullary n, void *args) {
 map *map_filter(map *m, _pred p, void *args) {
   init_asserts(m);
   map filter;
-  __map_init(&filter, m->__el_size, m->__key_size, m->allocator, TO_STACK);
+  __map_init(&filter, m->__el_size, m->__key_size, m->allocator, TO_STACK,
+             m->__size);
 
   for (int64_t i = 0; i < m->elements.length; i++) {
     void *el = vec_at(&m->elements, i);

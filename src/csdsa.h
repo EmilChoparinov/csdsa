@@ -72,6 +72,7 @@
 #define TO_STACK            0
 #define TO_HEAP             1
 #define VECTOR_DEFAULT_SIZE 1
+#define STACK_DEFAULT_SIZE  1
 #define MAP_DEFAULT_SIZE    32
 #define MAP_LOAD_FACTOR     0.75
 
@@ -82,26 +83,26 @@ typedef struct stalloc stalloc;
 typedef struct cbuff   cbuff;
 
 /* Internal typedefs for a functional programming style. */
-typedef void (*_nullary)(void *el, void *args);
+typedef void (*_each)(void *el, void *args);
 typedef bool (*_pred)(void *el, void *args);
 typedef void (*_unary)(void *out, void *el, void *args);
 typedef void (*_binary)(void *out, void *a, void *b, void *args);
 typedef bool (*_compare)(void *a, void *b, void *args);
 
 /* Macros to create FP functions. */
-#define nullary(ty, prop, name, body)                                          \
+#define feach(name, ty, prop, body)                                          \
   void name(void *_el, void *args) {                                           \
     ty prop = *(ty *)_el;                                                      \
     body                                                                       \
   }
 
-#define pred(ty, prop, name, body)                                             \
+#define pred(name, ty, prop, body)                                             \
   bool name(void *_el, void *args) {                                           \
     ty prop = *(ty *)_el;                                                      \
     body;                                                                      \
   }
 
-#define unary(ty, prop, name, body)                                            \
+#define unary(name, ty, prop, body)                                            \
   ty name##_un(void *_el, void *args) {                                        \
     ty prop = *(ty *)_el;                                                      \
     body;                                                                      \
@@ -111,7 +112,7 @@ typedef bool (*_compare)(void *a, void *b, void *args);
     memcpy(out, &prop, sizeof(ty));                                            \
   }
 
-#define binary(ty, prop_a, prop_b, name, body)                                 \
+#define binary(name, ty, prop_a, prop_b, body)                                 \
   ty name##_bin(void *a, void *b, void *args) {                                \
     ty prop_a = *(ty *)_a;                                                     \
     ty prop_b = *(ty *)_b;                                                     \
@@ -122,7 +123,7 @@ typedef bool (*_compare)(void *a, void *b, void *args);
     memcpy(out, &prop, sizeof(ty));                                            \
   }
 
-#define fold(ret_ty, ty, result_prop, prop_a, name, body)                      \
+#define fold(ret_ty, name, ty, result_prop, prop_a, body)                      \
   ret_ty name##_bin(void *_res, void *_a, void *args) {                        \
     ret_ty result_prop = *(ret_ty *)_res;                                      \
     ty     prop_a = *(ty *)_a;                                                 \
@@ -133,7 +134,7 @@ typedef bool (*_compare)(void *a, void *b, void *args);
     memcpy(out, &prop, sizeof(ret_ty));                                        \
   }
 
-#define compare(ty, prop_a, prop_b, name, body)                                \
+#define compare(name, ty, prop_a, prop_b, body)                                \
   bool name(void *_a, void *_b, void *args) {                                  \
     ty prop_a = *(ty *)_a;                                                     \
     ty prop_b = *(ty *)_b;                                                     \
@@ -203,7 +204,8 @@ struct vec {
 };
 
 /* Container Operations */
-vec  *__vec_init(vec *v, int64_t el_size, stalloc *alloc, int32_t flags);
+vec  *__vec_init(vec *v, int64_t el_size, stalloc *alloc, int32_t flags,
+                 int64_t initial_size);
 void  vec_free(vec *v);
 void  vec_resize(vec *v, int64_t size);
 void *vec_copy(vec *dest, vec *src);
@@ -224,7 +226,7 @@ void    vec_swap(vec *v, int64_t idx1, int64_t idx2);
 void    vec_sort(vec *v, _compare cmp, void *args);
 int64_t vec_count_if(vec *v, _pred p, void *args);
 vec    *vec_filter(vec *v, _pred p, void *args);
-void    vec_foreach(vec *v, _nullary n, void *args);
+void    vec_foreach(vec *v, _each n, void *args);
 vec    *vec_map(vec *v, _unary u, void *args);
 void   *vec_foldl(vec *v, _binary b, void *result, void *args);
 
@@ -232,14 +234,15 @@ void   *vec_foldl(vec *v, _binary b, void *result, void *args);
 #define VEC_TYPEDEC(cn, ty)                                                      \
   typedef vec cn;                                                                \
                                                                                  \
-  cn *cn##_sinit(cn *v) {                                                        \
-    return __vec_init((vec *)v, sizeof(ty), framed_alloc, TO_STACK);             \
+  cn *cn##_sinit(cn *v, int64_t v_size) {                                        \
+    return __vec_init((vec *)v, sizeof(ty), framed_alloc, TO_STACK, v_size);     \
   }                                                                              \
   cn *cn##_hinit(cn *v) {                                                        \
-    return __vec_init((vec *)v, sizeof(ty), framed_alloc, TO_HEAP);              \
+    return __vec_init((vec *)v, sizeof(ty), framed_alloc, TO_HEAP,               \
+                      VECTOR_DEFAULT_SIZE);                                      \
   }                                                                              \
-  cn *cn##_inita(cn *v, stalloc *alloc, int8_t flags) {                          \
-    return __vec_init((vec *)v, sizeof(ty), alloc, flags);                       \
+  cn *cn##_inita(cn *v, stalloc *alloc, int8_t flags, int64_t v_size) {          \
+    return __vec_init((vec *)v, sizeof(ty), alloc, flags, v_size);               \
   }                                                                              \
   void cn##_free(cn *v) { vec_free((vec *)v); }                                  \
   void cn##_resize(cn *v, int64_t size) { vec_resize((vec *)v, size); }          \
@@ -270,7 +273,7 @@ void   *vec_foldl(vec *v, _binary b, void *result, void *args);
   cn *cn##_filter(cn *v, _pred p, void *args) {                                  \
     return vec_filter((vec *)v, p, args);                                        \
   }                                                                              \
-  void cn##_foreach(cn *v, _nullary n, void *args) {                             \
+  void cn##_foreach(cn *v, _each n, void *args) {                             \
     vec_foreach((vec *)v, n, args);                                              \
   }                                                                              \
   cn *cn##_map(cn *v, _unary u, void *args) {                                    \
@@ -305,7 +308,7 @@ struct map {
 
 /* Container Operations */
 map *__map_init(map *m, int64_t el_size, int64_t key_size, stalloc *alloc,
-                int32_t flags);
+                int32_t flags, int64_t intial_size);
 
 void    map_free(map *m);
 void    map_clear(map *m);
@@ -322,7 +325,7 @@ kvpair read_kvpair(map *m, void *el);
 
 /* Functional Operations */
 int64_t map_count_if(map *m, _pred p, void *args);
-void    map_foreach(map *m, _nullary n, void *args);
+void    map_foreach(map *m, _each n, void *args);
 map    *map_filter(map *m, _pred p, void *args);
 kvpair  map_find_one(map *m, _pred p, void *args);
 
@@ -330,18 +333,19 @@ kvpair  map_find_one(map *m, _pred p, void *args);
 #define MAP_TYPEDEC(cn, keyty, ty)                                             \
   typedef map cn;                                                              \
                                                                                \
-  cn *cn##_sinit(cn *m) {                                                      \
+  cn *cn##_sinit(cn *m, int64_t initial_size) {                                \
     return __map_init((map *)m, sizeof(ty), sizeof(keyty), framed_alloc,       \
-                      TO_STACK);                                               \
+                      TO_STACK, initial_size);                                 \
   }                                                                            \
                                                                                \
   cn *cn##_hinit(cn *m) {                                                      \
     return __map_init((map *)m, sizeof(ty), sizeof(keyty), framed_alloc,       \
-                      TO_HEAP);                                                \
+                      TO_HEAP, MAP_DEFAULT_SIZE);                              \
   }                                                                            \
                                                                                \
-  cn *cn##_inita(cn *m, stalloc *alloc, int8_t flags) {                        \
-    return __map_init((map *)m, sizeof(ty), sizeof(keyty), alloc, flags);      \
+  cn *cn##_inita(cn *m, stalloc *alloc, int8_t flags, int64_t initial_size) {  \
+    return __map_init((map *)m, sizeof(ty), sizeof(keyty), alloc, flags,       \
+                      initial_size);                                           \
   }                                                                            \
                                                                                \
   /* Container Operations */                                                   \
@@ -366,7 +370,7 @@ kvpair  map_find_one(map *m, _pred p, void *args);
   int64_t cn##_count_if(cn *m, _pred p, void *args) {                          \
     return map_count_if((map *)m, p, args);                                    \
   }                                                                            \
-  void cn##_foreach(cn *m, _nullary n, void *args) {                           \
+  void cn##_foreach(cn *m, _each n, void *args) {                           \
     map_foreach((map *)m, n, args);                                            \
   }                                                                            \
   cn *cn##_filter(cn *m, _pred p, void *args) {                                \
@@ -375,6 +379,64 @@ kvpair  map_find_one(map *m, _pred p, void *args);
   kvpair cn##_find_one(cn *m, _pred p, void *args) {                           \
     return map_find_one((map *)m, p, args);                                    \
   }
+
+/* =========================================================================
+  Section: Set
+========================================================================= */
+typedef struct set set;
+struct set {
+  map internals; /* A set is just an open address map. */
+};
+
+/* Container Operations */
+set    *__set_init(set *s, int64_t el_size, stalloc *alloc, int32_t flags,
+                   int64_t initial_size);
+void    set_free(set *s);
+void    set_clear(set *s);
+set    *set_copy(set *dest, set *src);
+int64_t set_length(set *s);
+
+set *set_intersect(set *a, set *b, set *out);
+set *set_union(set *a, set *b, set *out);
+
+/* Element Operations */
+void set_put(set *s, void *key);
+bool set_has(set *s, void *key);
+void set_del(set *s, void *key);
+
+#define SET_TYPEDEC(cn, ty)                                                    \
+  typedef set cn;                                                              \
+                                                                               \
+  cn *cn##_sinit(cn *s, int64_t initial_size) {                                \
+    return __set_init((set *)s, sizeof(ty), framed_alloc, TO_STACK,            \
+                      initial_size);                                           \
+  }                                                                            \
+                                                                               \
+  cn *cn##_hinit(cn *s) {                                                      \
+    return __set_init((set *)s, sizeof(ty), framed_alloc, TO_HEAP,             \
+                      MAP_DEFAULT_SIZE);                                       \
+  }                                                                            \
+                                                                               \
+  cn *cn##_inita(cn *s, stalloc *alloc, int8_t flags, int64_t initial_size) {  \
+    return __set_init((set *)s, sizeof(ty), alloc, flags, initial_size);       \
+  }                                                                            \
+                                                                               \
+  /* Container Operations */                                                   \
+  void    cn##_free(cn *s) { set_free((set *)s); }                             \
+  void    cn##_clear(cn *s) { set_clear((set *)s); }                           \
+  void    cn##_copy(cn *dest, cn *src) { set_copy((set *)dest, (set *)src); }  \
+  int64_t cn##_length(cn *s) { return set_length((set *)s); }                  \
+                                                                               \
+  cn *cn##_intersect(cn *a, cn *b, cn *out) {                                  \
+    return (cn *)set_intersect((set *)a, (set *)b, (set *)out);                \
+  }                                                                            \
+  cn *cn##_union(cn *a, cn *b, cn *out) {                                      \
+    return (cn *)set_union((set *)a, (set *)b, (set *)out);                    \
+  }                                                                            \
+                                                                               \
+  void cn##_put(cn *s, void *key) { set_put((set *)s, key); }                  \
+  bool cn##_has(cn *s, void *key) { return set_has((set *)s, key); };          \
+  void cn##_del(cn *s, void *key) { set_del((set *)s, key); }
 
 /* =========================================================================
   Section: Cbuff

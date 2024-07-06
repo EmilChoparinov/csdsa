@@ -27,7 +27,7 @@ stalloc    *allocator = NULL;
 
 void setUp(void) {
   start_frame(allocator);
-  id_cs_map_inita(&tmap, allocator, TO_STACK);
+  id_cs_map_inita(&tmap, allocator, TO_STACK, MAP_DEFAULT_SIZE);
 }
 void tearDown(void) {
   id_cs_map_free(&tmap);
@@ -157,7 +157,7 @@ void test_duplicate_handling(void) {
   }
 }
 
-nullary(kvpair, item, require_active, {
+feach(require_active, kvpair, item, {
   cs *value = item.value;
   TEST_ASSERT(value->active);
 });
@@ -171,7 +171,7 @@ void test_foreach(void) {
   id_cs_map_foreach(&tmap, require_active, NULL);
 }
 
-pred(kvpair, item, is_active, {
+pred(is_active, kvpair, item, {
   cs *value = item.value;
   return value->active;
 });
@@ -187,14 +187,14 @@ void test_count_if(void) {
 MAP_TYPEDEC(int_int_map, int, int);
 typedef int_int_map int_int_map_t;
 
-pred(kvpair, item, select_filter, {
+pred(select_filter, kvpair, item, {
   int *t = item.value;
   return *t == 1 || *t == 10;
 });
 
 void test_filter(void) {
   int_int_map_t f;
-  int_int_map_sinit(&f);
+  int_int_map_sinit(&f, 500);
 
   for (int i = 0; i < 500; i++) {
     int_int_map_put(&f, &i, &i);
@@ -216,7 +216,7 @@ void test_filter(void) {
 
 void test_to_vec(void) {
   int_int_map_t f;
-  int_int_map_sinit(&f);
+  int_int_map_sinit(&f, 500);
 
   for (int i = 0; i < 500; i++) {
     int_int_map_put(&f, &i, &i);
@@ -235,7 +235,7 @@ void test_to_vec(void) {
 
 void test_map_copy(void) {
   int_int_map_t orig, copy;
-  int_int_map_sinit(&orig);
+  int_int_map_sinit(&orig, 50);
 
   for (int i = 0; i < 50; i++) {
     int_int_map_put(&orig, &i, &i);
@@ -255,7 +255,7 @@ void test_map_copy(void) {
 
 void test_map_clear(void) {
   int_int_map_t orig;
-  int_int_map_sinit(&orig);
+  int_int_map_sinit(&orig, 50);
 
   for (int i = 0; i < 50; i++) {
     int_int_map_put(&orig, &i, &i);
