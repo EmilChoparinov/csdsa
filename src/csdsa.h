@@ -1,56 +1,55 @@
 /* =========================================================================
-    Author: E.D Choparinov, Amsterdam
-    Related Files: csdsa.h
-    Created On: June 28 2024
-    Purpose:
-        The purpose of this library is to provide various data structures
-        and algorithms for solving general computing tasks in C. The library
-        leans towards being as functional as possible, so most calls to this
-        library require passing in functions.
+Author: E.D Choparinov, Amsterdam
+Related Files: csdsa.h
+Created On: June 28 2024
+Purpose:
+    The purpose of this library is to provide various data structures
+    and algorithms for solving general computing tasks in C. The library
+    leans towards being as functional as possible, so most calls to this
+    library require passing in functions.
 
-        This library also features an allocator that provides stack or random
-        heap allocation modes. The user can specify either directly which
-        allocator instance to use or to use a globally existing allocator.
+    This library also features an allocator that provides stack or random
+    heap allocation modes. The user can specify either directly which
+    allocator instance to use or to use a globally existing allocator.
 
-    The following are the contents and descriptions of each part of this
-    library:
+The following are the contents and descriptions of each part of this
+library:
 
-    === Allocator ===
-    The allocator built into this library is called stalloc (as in for stack
-    allocator) and supports stack allocation and random heap allocation. The
-    allocator utilizes the same contiguous memory segment for both heap and
-    stack allocation for best performance.
+=== Allocator ===
+The allocator built into this library is called stalloc (as in for stack
+allocator) and supports stack allocation and random heap allocation. The
+allocator utilizes the same contiguous memory segment for both heap and
+stack allocation for best performance.
 
-    Only random heap allocations may use the libraries free function. Stack
-    context allocations use pop() or the built in global stack pop function.
+Only random heap allocations may use the libraries free function. Stack
+context allocations use pop() or the built in global stack pop function.
 
-    === Data Structures ===
-    vec_*   : Wrapper for a contiguous segment of memory. Can be
-                      used to represent a fixed or resizable array.
+=== Data Structures ===
+vec_*   : Wrapper for a contiguous segment of memory. Can be
+                  used to represent a fixed or resizable array.
 
-    map_*   : Open address hashing table with resize capabilities.
+map_*   : Open address hashing table with resize capabilities.
 
-    set_*   : Implemented as a resizeable sparse set wrapped with
-              the libraries hashing function.
+set_*   : Implemented as a resizeable sparse set wrapped with
+          the libraries hashing function.
 
-    stack_* : Wrapper over vec_* and constrains the vector.
+stack_* : Wrapper over vec_* and constrains the vector.
 
-    queue_* : Wrapper over vec_* again and constrains the vector.
+queue_* : Wrapper over vec_* again and constrains the vector.
 
-    graph_* : Implemented as a map of sets. Each vertex stores a pointer to
-              some address you define.
+graph_* : Implemented as a map of sets. Each vertex stores a pointer to
+          some address you define.
 
-    buff_*  : Buffer API implementation that takes a region of memory and allows
-              for various manipulations
+buff_*  : Buffer API implementation that takes a region of memory and allows
+          for various manipulations
 
-    === Algorithms ===
-    hash_bytes() : Modified version of djb2 to consume N bytes. Originally from:
-                   http://www.cse.yorku.ca/~oz/hash.html
+=== Algorithms ===
+hash_bytes() : Modified version of djb2 to consume N bytes. Originally from:
+                http://www.cse.yorku.ca/~oz/hash.html
 
-    bfs()        : Breadth first search over a graph
-    dfs()        : Depth first search over a graph
-    a_star()     : The classic a* graph search algorithm.
-
+bfs()        : Breadth first search over a graph
+dfs()        : Depth first search over a graph
+a_star()     : The classic a* graph search algorithm.
 ========================================================================= */
 #ifndef __HEADER_CSDSA_H__
 #define __HEADER_CSDSA_H__
