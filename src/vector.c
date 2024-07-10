@@ -14,6 +14,7 @@ vec *__vec_init(vec *v, int64_t el_size, stalloc *alloc, int32_t flags,
   v->__el_size = el_size;
   v->flags = flags;
   v->elements = vec_alloc(v, v->__el_size * v->__size);
+  v->cache_counter = 0;
   assert(v->elements);
   return v;
 }
@@ -27,7 +28,7 @@ void vec_free(vec *v) {
 void vec_resize(vec *v, int64_t size) {
   init_asserts(v);
   v->length = size;
-  if (size < v->__size) return;
+  if (size <= v->__size) return;
   int64_t old_size = v->__size;
   while (size > v->__size) v->__size *= 2;
   void *new_addr = vec_alloc(v, v->__size * v->__el_size);
@@ -37,6 +38,7 @@ void vec_resize(vec *v, int64_t size) {
   memmove(new_addr, v->elements, old_size * v->__el_size);
   memset(new_addr + old_size * v->__el_size, 0,
          v->__size * v->__el_size - old_size * v->__el_size);
+  v->cache_counter++;
 
   /* If old address was heap alloc'd then it needs to be cleared */
   if (v->flags == TO_HEAP) hfree(v->allocator, v->elements);
@@ -151,7 +153,8 @@ int64_t vec_count_if(vec *v, _pred p, void *args) {
 vec *vec_filter(vec *v, _pred p, void *args) {
   init_asserts(v);
   vec filter;
-  __vec_init(&filter, v->__el_size, v->allocator, TO_STACK, VECTOR_DEFAULT_SIZE);
+  __vec_init(&filter, v->__el_size, v->allocator, TO_STACK,
+             VECTOR_DEFAULT_SIZE);
   vec_resize(&filter, v->length);
 
   for (int64_t i = 0; i < v->length; i++) {

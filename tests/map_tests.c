@@ -45,6 +45,7 @@ void test_filter(void);
 void test_to_vec(void);
 void test_map_copy(void);
 void test_map_clear(void);
+void test_map_cache(void);
 
 void tests(void) {
   FRAME(allocator, RUN_TEST(test_count_if));
@@ -58,6 +59,7 @@ void tests(void) {
   FRAME(allocator, RUN_TEST(test_to_vec));
   FRAME(allocator, RUN_TEST(test_map_copy));
   FRAME(allocator, RUN_TEST(test_map_clear));
+  FRAME(allocator, RUN_TEST(test_map_cache));
 }
 
 int main(void) {
@@ -265,4 +267,17 @@ void test_map_clear(void) {
   for (int i = 0; i < 50; i++) {
     assert(!int_int_map_has(&orig, &i));
   }
+}
+
+void test_map_cache(void) {
+  int_int_map_t orig;
+  int_int_map_sinit(&orig, 2);
+  TEST_ASSERT(orig.cache_counter == 0);
+
+  /* Force a resize */
+  for(int i = 0; i < 3; i++) {
+    int_int_map_put(&orig, &i, &i);
+  }
+
+  TEST_ASSERT(orig.cache_counter == 1);
 }

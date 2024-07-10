@@ -29,6 +29,7 @@ void count_multiples_of_10_to_100(void);
 void filter_multiples_of_10_and_sum(void);
 void divide_all_even_numbers_by_2_under_100(void);
 void add_one_to_odds_and_set_all_evens_to_active(void);
+void test_cache_counter(void);
 
 void sort(void);
 void delete_by_idx(void);
@@ -45,6 +46,7 @@ void tests(void) {
   FRAME(allocator, RUN_TEST(sort));
   FRAME(allocator, RUN_TEST(delete_by_idx));
   FRAME(allocator, RUN_TEST(test_vec_copy));
+  FRAME(allocator, RUN_TEST(test_cache_counter));
 }
 
 int main(void) {
@@ -227,4 +229,17 @@ void test_vec_copy(void) {
 
   int_vec_free(&copy);
   int_vec_free(&ivec);
+}
+void test_cache_counter(void) {
+  int_vec ivec;
+  int_vec_inita(&ivec, allocator, TO_STACK, 2);
+
+  TEST_ASSERT(ivec.cache_counter == 0);
+
+  /* Trigger resize */
+  for (int i = 0; i < 3; i++) {
+    int_vec_push(&ivec, &i);
+  }
+
+  TEST_ASSERT(ivec.cache_counter == 1);
 }

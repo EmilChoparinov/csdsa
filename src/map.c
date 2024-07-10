@@ -67,6 +67,10 @@ static void maintain_load_factor(map *m) {
   float lf = (float)m->slots_in_use / m->__size;
   if (lf < MAP_LOAD_FACTOR) return;
 
+  /* The cache invalidation counter persists across resizes */
+  int32_t cache_counter = m->cache_counter;
+  cache_counter++;
+
   /* If the load factor constraint is reached, create a map double the
      current size. */
   map new_map;
@@ -85,6 +89,7 @@ static void maintain_load_factor(map *m) {
 
   map_free(m);
   memmove(m, &new_map, sizeof(map));
+  m->cache_counter = cache_counter;
 }
 
 static void *__get_key(map *m, void *el) {
@@ -110,6 +115,7 @@ map *__map_init(map *m, int64_t el_size, int64_t key_size, stalloc *alloc,
   m->flags = flags;
   m->allocator = alloc;
   m->in_use_id = 1;
+  m->cache_counter = 0;
 
   m->__size = initial_size;
   m->__el_size = el_size;

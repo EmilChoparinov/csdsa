@@ -200,6 +200,7 @@ struct vec {
   int64_t  __top, __size, __el_size;
   int64_t  length;
   int32_t  flags;
+  int32_t  cache_counter; /* Increments each resize for invalidation checks. */
   stalloc *allocator;
   void    *elements;
 };
@@ -331,9 +332,10 @@ struct map {
   int64_t __el_size;  /* The size of a element */
   int64_t __key_size; /* The size of a key */
 
-  int64_t  slots_in_use; /* The count of elements in the map. */
-  int32_t  flags;        /* Contains allocation context information. */
-  int32_t  in_use_id;    /* Each clear increments this. */
+  int64_t  slots_in_use;  /* The count of elements in the map. */
+  int32_t  flags;         /* Contains allocation context information. */
+  int32_t  in_use_id;     /* Each clear increments this. */
+  int32_t  cache_counter; /* Increments each resize of invalidation checks. */
   stalloc *allocator;
   vec      elements;
 };
