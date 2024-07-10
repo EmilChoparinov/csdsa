@@ -15,7 +15,7 @@ struct id {
   bool is_active;
 } __attribute__((packed));
 
-MAP_TYPEDEC(id_cs_map, id, cs);
+MAP_TYPE_IMPL(id_cs_map, id, cs);
 typedef id_cs_map id_cs_map_t;
 
 /*-------------------------------------------------------
@@ -118,7 +118,6 @@ void test_push_loadfactor(void) {
                   &(cs){.x = 1, .y = 2, .z = 3, .active = true});
     TEST_ASSERT(id_cs_map_has(&tmap, &(id){.is_active = true, .uid = i}));
   }
-  printf("USED: %ld", 500 * (sizeof(id) + sizeof(cs) + sizeof(int32_t)));
 
   /* Check hash algo */
   for (int i = 0; i < 500; i++) {
@@ -184,7 +183,7 @@ void test_count_if(void) {
   TEST_ASSERT(id_cs_map_count_if(&tmap, is_active, NULL) == 500);
 }
 
-MAP_TYPEDEC(int_int_map, int, int);
+MAP_TYPE_IMPL(int_int_map, int, int);
 typedef int_int_map int_int_map_t;
 
 pred(select_filter, kvpair, item, {

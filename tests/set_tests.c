@@ -1,7 +1,7 @@
 #include "csdsa.h"
 #include "unity.h"
 
-SET_TYPEDEC(int_set, int);
+SET_TYPE_IMPL(int_set, int);
 
 stalloc *allocator = NULL;
 int_set  iset;

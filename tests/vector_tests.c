@@ -7,7 +7,7 @@ struct group {
   bool active;
 };
 
-VEC_TYPEDEC(gvec, group);
+VEC_TYPE_IMPL(gvec, group);
 
 gvec     vector;
 stalloc *allocator = NULL;
@@ -206,10 +206,9 @@ void delete_by_idx(void) {
   TEST_ASSERT(itr_count == original_length);
 }
 
-VEC_TYPEDEC(int_vec, int);
+VEC_TYPE_IMPL(int_vec, int);
 
 void test_vec_copy(void) {
-  printf("START\n");
 
   int_vec ivec;
   int_vec_inita(&ivec, allocator, TO_HEAP, VECTOR_DEFAULT_SIZE);
@@ -217,7 +216,6 @@ void test_vec_copy(void) {
   for (int i = 1; i >= 0; i--) {
     int_vec_push(&vector, &i);
   }
-  printf("FIN\n");
 
   int_vec copy;
   int_vec_copy(&copy, &vector);

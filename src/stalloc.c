@@ -62,6 +62,9 @@ struct stalloc {
   int64_t      allocator_count; /* The count in `allocators` */
 };
 
+bool          pthread_key_init = false;
+pthread_key_t frame_context;
+
 /*-------------------------------------------------------
  * Implementation
  *-------------------------------------------------------*/
@@ -69,8 +72,6 @@ static void append_new_alloc(stalloc *allocs, int64_t region_size);
 static void alloc_make(alloc *alloc, int64_t region_size);
 static void attempt_alloc_merge(stalloc *allocs);
 static void _stpop(stalloc *a, int64_t to_pop);
-
-stalloc *framed_alloc = NULL;
 
 stalloc *stalloc_create(int64_t bytes) {
   stalloc *alloc = calloc(1, sizeof(*alloc));
@@ -81,6 +82,11 @@ stalloc *stalloc_create(int64_t bytes) {
   alloc->frames = NULL;
   alloc->frame_count = 0;
   alloc->__frame_arr_len = 0;
+
+  if (!pthread_key_init) {
+    pthread_key_create(&frame_context, NULL);
+    pthread_key_init = true;
+  }
 
   return alloc;
 }
@@ -101,7 +107,7 @@ void *__stpush(stalloc *a, int64_t bytes) {
 
   alloc  *alloc_to_use = a->top;
   int64_t block_size = bytes;
-  
+
   // TODO: implement stack alignment!
   // addr = (addr + (8 - 1)) & -8;
   // /* Ensure the stack pointer is aligned */
@@ -144,7 +150,7 @@ void *__stpush(stalloc *a, int64_t bytes) {
   return mem_to_return;
 }
 
-void *__stpushframe(int64_t bytes) { return __stpush(framed_alloc, bytes); }
+void *__stpushframe(int64_t bytes) { return __stpush(get_frame_ctx(), bytes); }
 
 void __stpop(stalloc *a) {
   _stpop(a, 1);
@@ -152,9 +158,16 @@ void __stpop(stalloc *a) {
 }
 
 void __stpopframe(void) {
-  _stpop(framed_alloc,
-         framed_alloc->frames[framed_alloc->frame_count - 1].stack_allocs);
+  _stpop(
+      get_frame_ctx(),
+      get_frame_ctx()->frames[get_frame_ctx()->frame_count - 1].stack_allocs);
 }
+
+stalloc *get_frame_ctx(void) {
+  stalloc *alloc = pthread_getspecific(frame_context);
+  return alloc;
+}
+void set_frame_ctx(stalloc *a) { pthread_setspecific(frame_context, a); }
 
 /*-------------------------------------------------------
  * Heap Allocation
@@ -180,9 +193,9 @@ void start_frame(stalloc *alloc) {
 
   alloc->frame_count++;
   int64_t new_len = alloc->__frame_arr_len;
-  while (new_len < alloc->frame_count) {
-    new_len *= 2;
-  }
+  while (new_len < alloc->frame_count) new_len *= 2;
+
+  set_frame_ctx(alloc);
 
   /* No resizing needed */
   if (new_len == alloc->__frame_arr_len) return;
@@ -192,7 +205,6 @@ void start_frame(stalloc *alloc) {
 }
 
 void end_frame(stalloc *alloc) {
-  assert(framed_alloc != NULL);
   assert(alloc->frame_count > 0);
   _stpop(alloc, alloc->frames[alloc->frame_count - 1].stack_allocs);
   alloc->frame_count--;
