@@ -60,7 +60,7 @@ set *set_intersect(set *a, set *b, set *out) {
   return out;
 }
 
-feach(add_to_set, kvpair, item, {
+static feach(add_to_set, kvpair, item, {
   void *key = item.key;
   set  *out = args;
   set_put(out, key);

@@ -196,6 +196,7 @@ void start_frame(stalloc *alloc) {
   while (new_len < alloc->frame_count) new_len *= 2;
 
   set_frame_ctx(alloc);
+  alloc->frames[alloc->frame_count - 1].stack_allocs = 0;
 
   /* No resizing needed */
   if (new_len == alloc->__frame_arr_len) return;

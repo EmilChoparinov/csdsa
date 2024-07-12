@@ -46,6 +46,7 @@ void test_to_vec(void);
 void test_map_copy(void);
 void test_map_clear(void);
 void test_map_cache(void);
+void test_overwrites(void);
 
 void tests(void) {
   FRAME(allocator, RUN_TEST(test_count_if));
@@ -60,6 +61,7 @@ void tests(void) {
   FRAME(allocator, RUN_TEST(test_map_copy));
   FRAME(allocator, RUN_TEST(test_map_clear));
   FRAME(allocator, RUN_TEST(test_map_cache));
+  FRAME(allocator, RUN_TEST(test_overwrites));
 }
 
 int main(void) {
@@ -275,9 +277,21 @@ void test_map_cache(void) {
   TEST_ASSERT(orig.cache_counter == 0);
 
   /* Force a resize */
-  for(int i = 0; i < 3; i++) {
+  for (int i = 0; i < 3; i++) {
     int_int_map_put(&orig, &i, &i);
   }
 
   TEST_ASSERT(orig.cache_counter == 1);
+}
+void test_overwrites(void) {
+  int_int_map_t orig;
+  int_int_map_sinit(&orig, 16);
+
+  int a = 5;
+  int b = 7;
+  int_int_map_put(&orig, &a, &b);
+  b = 20;
+  int_int_map_put(&orig, &a, &b);
+
+  TEST_ASSERT(*(int *)int_int_map_get(&orig, &a).value == 20);
 }
