@@ -198,7 +198,7 @@ void map_put(map *m, void *key, void *value) {
   assert(value);
   maintain_load_factor(m);
 
-  if (map_has(m, key)) return;
+  if (map_has(m, key)) map_del(m, key);
 
   int64_t idx = hash_bytes(key, m->__key_size) % m->elements.length;
   idx = linear_search_open_pos(m, idx);

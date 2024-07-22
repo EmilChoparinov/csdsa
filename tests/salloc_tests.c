@@ -71,12 +71,28 @@ void test_block_bit_arithmatic(void) {
   TEST_ASSERT(!IS_FREE(guard));
 }
 
+void stack_frame_tests(void) {
+  stalloc *alloc = stalloc_create(128);
+  start_frame(alloc);
+  int *x = stpusha(alloc, sizeof(int));
+  *x = 1;
+  start_frame(alloc);
+  int *a = stpusha(alloc, sizeof(int));
+  *a = 2;
+  stpop();
+  stpusha(alloc, sizeof(int));
+  end_frame(alloc);
+  TEST_ASSERT(*x == 1);
+  end_frame(alloc);
+}
+
 int main() {
 
   UNITY_BEGIN();
 
   RUN_TEST(test_block_bit_arithmatic);
   RUN_TEST(test_concurrent_globals);
+  RUN_TEST(stack_frame_tests);
 
   UNITY_END();
 }

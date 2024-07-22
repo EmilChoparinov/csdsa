@@ -104,16 +104,16 @@ void stalloc_free(stalloc *a) {
 }
 
 void *__stpush(stalloc *a, int64_t bytes) {
-  return calloc(1, bytes);
+
   alloc  *alloc_to_use = a->top;
   int64_t block_size = bytes;
 
-  const size_t alignment = 8; // Assuming 8-byte alignment
-  uintptr_t    current_addr = (uintptr_t)alloc_to_use->stack_ptr + HEADER_SIZE;
-  uintptr_t aligned_addr = (current_addr + (alignment - 1)) & ~(alignment - 1);
-  size_t    padding = aligned_addr - current_addr;
+  // const size_t alignment = 8; // Assuming 8-byte alignment
+  // uintptr_t    current_addr = (uintptr_t)alloc_to_use->stack_ptr + HEADER_SIZE;
+  // uintptr_t aligned_addr = (current_addr + (alignment - 1)) & ~(alignment - 1);
+  // size_t    padding = aligned_addr - current_addr;
 
-  block_size += padding;
+  // block_size += padding;
 
   if (alloc_to_use->stack_ptr + block_size + HEADER_SIZE + FOOTER_SIZE >
       alloc_to_use->heap_div_ptr) {
@@ -181,7 +181,6 @@ void hfree(stalloc *alloc, void *ptr) { free(ptr); }
  *-------------------------------------------------------*/
 void start_frame(stalloc *alloc) {
   if (alloc->__frame_arr_len == 0) {
-    alloc->frame_count++;
     alloc->__frame_arr_len = 1;
     alloc->frames =
         calloc(STACK_FRAME_GUESS, alloc->__frame_arr_len * sizeof(stack_frame));
@@ -192,13 +191,13 @@ void start_frame(stalloc *alloc) {
   while (new_len < alloc->frame_count) new_len *= 2;
 
   set_frame_ctx(alloc);
+  alloc->frames[alloc->frame_count - 1].stack_allocs = 0;
 
   /* No resizing needed */
   if (new_len == alloc->__frame_arr_len) return;
 
   alloc->__frame_arr_len = new_len;
   alloc->frames = recalloc(alloc->frames, new_len * sizeof(stack_frame));
-  alloc->frames[alloc->frame_count - 1].stack_allocs = 0;
 }
 
 void end_frame(stalloc *alloc) {
