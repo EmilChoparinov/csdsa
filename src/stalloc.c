@@ -104,20 +104,16 @@ void stalloc_free(stalloc *a) {
 }
 
 void *__stpush(stalloc *a, int64_t bytes) {
-
+  return calloc(1, bytes);
   alloc  *alloc_to_use = a->top;
   int64_t block_size = bytes;
 
-  // TODO: implement stack alignment!
-  // addr = (addr + (8 - 1)) & -8;
-  // /* Ensure the stack pointer is aligned */
-  // uintptr_t aligned_stack_ptr = (uintptr_t)alloc_to_use->stack_ptr;
-  // if (aligned_stack_ptr % 8 != 0) {
-  //   aligned_stack_ptr = (aligned_stack_ptr + 7) & ~((uintptr_t)7);
-  // }
+  const size_t alignment = 8; // Assuming 8-byte alignment
+  uintptr_t    current_addr = (uintptr_t)alloc_to_use->stack_ptr + HEADER_SIZE;
+  uintptr_t aligned_addr = (current_addr + (alignment - 1)) & ~(alignment - 1);
+  size_t    padding = aligned_addr - current_addr;
 
-  // /* Add the difference to the user block as padding */
-  // block_size += aligned_stack_ptr - (uintptr_t)alloc_to_use->stack_ptr;
+  block_size += padding;
 
   if (alloc_to_use->stack_ptr + block_size + HEADER_SIZE + FOOTER_SIZE >
       alloc_to_use->heap_div_ptr) {
@@ -196,13 +192,13 @@ void start_frame(stalloc *alloc) {
   while (new_len < alloc->frame_count) new_len *= 2;
 
   set_frame_ctx(alloc);
-  alloc->frames[alloc->frame_count - 1].stack_allocs = 0;
 
   /* No resizing needed */
   if (new_len == alloc->__frame_arr_len) return;
 
   alloc->__frame_arr_len = new_len;
   alloc->frames = recalloc(alloc->frames, new_len * sizeof(stack_frame));
+  alloc->frames[alloc->frame_count - 1].stack_allocs = 0;
 }
 
 void end_frame(stalloc *alloc) {
